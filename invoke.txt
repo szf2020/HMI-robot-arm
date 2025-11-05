@@ -1,0 +1,17 @@
+ 	//invoke retern value
+
+	public int SnapEvaluateInv()
+        {
+            try
+            {
+                int i = 0;
+
+                if (InvokeRequired)
+                { this.Invoke(new Action(() => i = SnapEvaluate())); }
+                else
+                { i = SnapEvaluate(); }
+
+                return i;
+            }
+            catch (Exception ex) { return 0; }
+        }
