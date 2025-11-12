@@ -1049,6 +1049,7 @@ namespace EndmillHMI
                     return;
                 }
 
+                if (trackBarSpeedSt.Value < 70) { trackBarSpeedSt.Value = 70; txtSpeedSt.Text = "70"; }
                 //MyStatic.bExitcycle = false;
                 //MyStatic.bExitMaincycle = false;
                 //MyStatic.bEmpty = false;
@@ -2530,6 +2531,7 @@ namespace EndmillHMI
 
                     Single speed = (int.Parse(txtSpeedSt.Text) * axis_Parameters[4].Ax_Vmax) / 100.0f;
                     Single speed1 = (int.Parse(txtSpeedSt.Text) / 100.0f);
+                    Thread.Sleep(200);
                     var task = Task.Run(() => MoveFooterWork(Pos5, speed, Pos1, Pos2, Pos4, speed1, Pos3, Lamps[0]));
                     await task;
                     CommReply reply1 = task.Result;
@@ -4415,7 +4417,7 @@ namespace EndmillHMI
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.DataToVision;
                 Parms.comment = "data to vision";
                 Parms.timeout = 2;
-                //NPNP
+                //NPNPP
                 //Array.Resize<Single>(ref Parms.SendParm, 8);
                 Array.Resize<Single>(ref Parms.SendParm, 9);
                 //16
@@ -10257,7 +10259,16 @@ namespace EndmillHMI
                 Axis = int.Parse(s[0]);
                 int axis = Axis;
                 Speed = AxStatus[axis - 1].Vmax;
-                Single speed = 0.2f * Speed * Single.Parse(txtSpeedSt.Text) / 100;
+                Single speed = 0;
+                if (axis == 5)
+                {
+                     speed =  Speed * Single.Parse(txtSpeedSt.Text) / 100;
+                    if (speed > Speed / 5.0f) speed = Speed / 5.0f;
+                }
+                else
+                {
+                     speed = 0.2f * Speed * Single.Parse(txtSpeedSt.Text) / 100;
+                }
 
                 var task1 = Task.Run(() => RunStations_Jog(device, axis, direction, speed));
                 //await task1;
@@ -10450,7 +10461,16 @@ namespace EndmillHMI
                 Axis = int.Parse(s[0]);
                 int axis = Axis;
                 Speed = AxStatus[axis - 1].Vmax;
-                Single speed = 0.2f * Speed * Single.Parse(txtSpeedSt.Text) / 100;
+                Single speed = 0;
+                if (axis == 5)
+                {
+                    speed = Speed * Single.Parse(txtSpeedSt.Text) / 100;
+                    if (speed > Speed / 5.0f) speed = Speed / 5.0f;
+                }
+                else
+                {
+                    speed = 0.2f * Speed * Single.Parse(txtSpeedSt.Text) / 100;
+                }
 
                 var task1 = Task.Run(() => RunStations_Jog(device, axis, direction, speed));
                 //await task1;
@@ -17265,8 +17285,8 @@ namespace EndmillHMI
                 Parms.SendParm[0] = (Single)MyStatic.InspectCmd.CheckColor;
                 rep1 = WC1.RunCmd(Parms);
 
-                if (!rep1.result) MessageBox.Show("COLOR INSPECT ERROR!", "ERROR", MessageBoxButtons.OK,
-                               MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                //if (!rep1.result) MessageBox.Show("COLOR INSPECT ERROR!", "ERROR", MessageBoxButtons.OK,
+                //               MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
 
 
                 if (rep1.result) reply.result = true;
@@ -18216,11 +18236,15 @@ namespace EndmillHMI
 
         private async void btnCheckColor_Click(object sender, EventArgs e)
         {
-
+            WebComm.CommReply reply = new WebComm.CommReply();
             try
             {
                 var task = Task.Run(() => CheckColor());
                 await task;
+                reply = task.Result;
+               
+                if (!reply.result) MessageBox.Show("COLOR INSPECT ERROR!", "ERROR", MessageBoxButtons.OK,
+                               MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
 
             }
             catch (Exception ex) { }
