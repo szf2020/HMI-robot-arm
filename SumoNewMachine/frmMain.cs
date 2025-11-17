@@ -30,6 +30,7 @@ using static System.Net.Mime.MediaTypeNames;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using static EndmillHMI.RobotFunctions;
 using System.Runtime.ConstrainedExecution;
+using System.Runtime.CompilerServices;
 
 //using System.Windows.Threading;
 //using System.Reflection;
@@ -786,6 +787,7 @@ namespace EndmillHMI
             if (!RobotData.CreateKeyValueArr("Item", "Order", txtOrder.Text.Trim(), ref arrsave, 0, 0, false, ref mess)) { MessageBox.Show("ERROR DATA " + mess); }
             if (!RobotData.CreateKeyValueArr("Item", "Item", txtItem.Text.Trim(), ref arrsave, 0, 0, false, ref mess)) { MessageBox.Show("ERROR DATA " + mess); }
             if (!RobotData.CreateKeyValueArr("Item", "Tray", cmbOrderTray.Text.Trim(), ref arrsave, 0, 0, false, ref mess)) { MessageBox.Show("ERROR DATA " + mess); }
+            if (!RobotData.CreateKeyValueArr("Item", "BladesNumber", upDwnCount.UpDownValue.ToString(), ref arrsave, 0, 0, false, ref mess)) { MessageBox.Show("ERROR DATA " + mess); }
             if (!RobotData.CreateKeyValueArr("Item", "Diam", txtPartDiam.Text.Trim(), ref arrsave, 0, 0, false, ref mess)) { MessageBox.Show("ERROR DATA " + mess); }
             if (!RobotData.CreateKeyValueArr("Item", "d", txtPartDiamd.Text.Trim(), ref arrsave, 0, 0, false, ref mess)) { MessageBox.Show("ERROR DATA " + mess); }
             if (!RobotData.CreateKeyValueArr("Item", "W", txtPartWeight.Text.Trim(), ref arrsave, 0, 0, false, ref mess)) { MessageBox.Show("ERROR DATA " + mess); }
@@ -11243,7 +11245,38 @@ namespace EndmillHMI
             catch (Exception err)
             { MessageBox.Show("ERROR READ INI FILE " + err); return false; }
         }
-        private bool LoadItemData(string file)
+
+        public void ComposeException(Exception ex, [CallerMemberName] string sCallerName="")
+        {
+            MessageBox.Show($"Error in {sCallerName}: {ex.Message}");
+        }
+
+        public int ParseInt(string sValue)
+        {
+            try
+            {
+                int iValue = -1;
+                if (int.TryParse(sValue, out iValue))
+                {
+                    return iValue;
+                }
+                else
+                {
+                    ComposeException(new Exception($"Error in ParseInt Value:{sValue}"));
+                    return int.MaxValue;
+                }
+            }
+            catch (Exception ex)
+            {
+                ComposeException(ex);
+                return int.MaxValue;
+            }
+        }
+
+
+
+
+private bool LoadItemData(string file)
         {
 
 
@@ -11271,6 +11304,18 @@ namespace EndmillHMI
                 txtComment.Text = IniData.GetKeyValueArrINI("Item", "Comment", arrnew);
                 cmbOrderTray.Text = IniData.GetKeyValueArrINI("Item", "Tray", arrnew);
                 cmbTray.Text = IniData.GetKeyValueArrINI("Item", "Tray", arrnew);
+
+                
+                string supDwnCount = IniData.GetKeyValueArrINI("Item", "BladesNumber", arrnew);
+                int iupDwnCount = ParseInt(supDwnCount);
+                if (iupDwnCount != int.MaxValue)
+                {
+                    upDwnCount.UpDownValue = iupDwnCount;
+                }
+                else
+                {
+                    ComposeException(new Exception($"Error in LoadItemData BladesNumber Value: {supDwnCount} File: {file}"));
+                }
                 return true;
             }
 
