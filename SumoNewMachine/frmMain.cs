@@ -2144,6 +2144,28 @@ namespace EndmillHMI
 
             }
         }
+
+        //private void CheckDeviceReply(WebComm.CommReply reply, string sErrorMessageToDisplay)
+        //{
+        //    if (!reply.result || reply.status == "" || reply.status == null)
+        //    {
+        //        MessageBox.Show(sErrorMessageToDisplay + " \r" + reply.status);
+        //        return;
+        //    }
+
+        //}
+
+        //private void CheckDeviceReply(EndmillHMI.CommReply reply, string sErrorMessageToDisplay)
+        //{
+        //    if (!reply.result || reply.status == "" || reply.status == null)
+        //    {
+        //        MessageBox.Show(sErrorMessageToDisplay + " \r" + reply.status);
+        //        return;
+        //    }
+
+        //}
+
+
         private async void CognexMainTask()
         {
             try
@@ -2373,6 +2395,47 @@ namespace EndmillHMI
 
 
                     }
+
+                    //bool bTake2FrontSnapsAndInspections = true;
+                    //if (bTake2FrontSnapsAndInspections)
+                    //{
+                    //    //Rotate Footer around the R axis for 135 deg
+                    //    int axis = 4;
+                    //    Single Speed = AxStatus[axis - 1].Vmax;
+                    //    Single speed = Speed * Single.Parse(txtSpeedSt.Text) / 100;
+
+
+                    //    var task1 = Task.Run(() => RunCurrPosCams(axis));
+
+                    //    await task1;
+                    //    //what's that for SHURA???
+                    //    //CommReply reply = new CommReply();
+                    //    //reply.result = false;
+                    //    var reply = task1.Result;
+                    //    CheckDeviceReply(reply, "Error when checking current Footer Rotation in Cognex Main Task");
+
+                    //    Single dist = 135;
+
+                    //    if (reply.data[5] > 180)
+                    //        dist = -135;
+
+                    //    var task21 = Task.Run(() => MoveRelSt(axis, dist, speed));
+                    //    await task21;
+
+                    //    CheckDeviceReply(task21.Result,"Error when going to 2nd rotation");
+
+                    //    Thread.Sleep(200);
+                    //    //await task22;
+
+                    //    var task23 = Task.Run(() => InspectFront());
+                    //    await task23;
+
+                    //    CheckDeviceReply(task23.Result, "Error when doing 2nd front inspetion");
+
+                    //}
+
+
+
                     Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex=> Inspect Front Finished" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                 }
 
