@@ -31,6 +31,7 @@ using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using static EndmillHMI.RobotFunctions;
 using System.Runtime.ConstrainedExecution;
 using System.Runtime.CompilerServices;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.TrackBar;
 
 //using System.Windows.Threading;
 //using System.Reflection;
@@ -977,7 +978,9 @@ namespace EndmillHMI
             frmMain.newFrmMain.trackSpeed.Value = 5;
             FanucSpeed = 5;
             txtSpeed.Text = FanucSpeed.ToString();
-            nDiameterCheck = (int)upDwnNdiam.UpDownValue;
+            nDiameterCheckUpDwn = (int)upDwnNdiam.UpDownValue;
+            nFrontCountUpDwn = (int)upDwnCount.UpDownValue;
+            nColorUpDwn=(int)upDwnColor.UpDownValue;
 
             InitGridReject();
 
@@ -1036,6 +1039,7 @@ namespace EndmillHMI
         DateTime NowTime = DateTime.Now;
         private async void BtnCycleStart_Click(object sender, EventArgs e)
         {
+            //return;//in debug
             System.Console.Beep();
             System.Media.SystemSounds.Beep.Play();
             chkStep.Checked = false;
@@ -1065,6 +1069,13 @@ namespace EndmillHMI
                 MyStatic.bEmpty = false;
                 MyStatic.bOneCycle = false;
                 cntLongPart = 0;
+               
+                nDiameterCheckUpDwn = (int)upDwnNdiam.UpDownValue;
+                nFrontCountUpDwn = (int)upDwnCount.UpDownValue;
+                nColorUpDwn = (int)upDwnColor.UpDownValue;
+                DeltaFront = 0;
+                FrontRotate = Single.Parse(txtFrontRotate.Text);
+
                 var task = Task.Run(() => Task.Run(() => RunMain()));
                 await task;
                 if (!task.Result)
@@ -1095,6 +1106,7 @@ namespace EndmillHMI
         public const int Robot2cmdOffset = 100;
         Task TaskRobot = null;
         Task TaskVision = null;
+        Task TaskVisionFront = null;
         Task TaskRefresh = null;
         Task TaskSua = null;
         Task TaskWeldon = null;
@@ -1106,12 +1118,16 @@ namespace EndmillHMI
             RobotLoadAct.InAction = false;
             InspectStationAct.InAction = false;
             InspectStationAct.VisionInAction = false;
+            InspectStationAct.VisionFrontInAction = false;
             InspectStationAct.SuaInAction = false;
             FooterStationAct.AxisInAction = false;
             //MyStatic.bExitcycleNow = false;
             InspectStationAct.WeldonInAction = false;
             bInspectLongPart = false;
             MyStatic.InitFini = false;
+            FrontRotate = Single.Parse(txtFrontRotate.Text);
+            DeltaFront = 0;
+            ErrorFront = 0;
 
 
 
@@ -1335,6 +1351,7 @@ namespace EndmillHMI
                     if ((!InspectStationAct.SuaInAction && !MyStatic.bReset) || TaskSua == null || TaskSua.Status != TaskStatus.Running) { TaskSua = Task.Run(() => CognexMainTask()); }
                     if ((!InspectStationAct.WeldonInAction && !MyStatic.bReset) || TaskWeldon == null || TaskWeldon.Status != TaskStatus.Running) { TaskWeldon = Task.Run(() => WeldonMainTask()); }
                     if (!MyStatic.bReset && (TaskRefresh == null || (TaskRefresh.Status != TaskStatus.Running))) TaskRefresh = Task.Run(() => RefreshLables());
+                    if ((!InspectStationAct.VisionFrontInAction && !MyStatic.bReset) || TaskVisionFront == null || TaskVisionFront.Status != TaskStatus.Running) { TaskVisionFront = Task.Run(() => VisionFrontMainTask()); }
 
                     if (MyStatic.bReset)
                     {
@@ -1432,103 +1449,7 @@ namespace EndmillHMI
                 if (MyStatic.bExitcycleNow) return;
 
                 //-------------inspect cam2 top -----------------------
-                //simulation
-                if (InspectStationAct.State[(int)InspectSt.Footer] == (int)MyStatic.E_State.Occupied &&
-                   !InspectStationAct.VisionInAction &&
-                   InspectStationAct.State[(int)InspectSt.VisionTop] != (int)MyStatic.E_State.TopSnapFini &&
-                   chkVisionSim.Checked &&
-                   !FooterStationAct.AxisInAction)
-                {
-                    InspectStationAct.VisionInAction = true;
-                    //move footer
-                    if (txtPartLength.Text != "" && Single.Parse(txtPartLength.Text) - master.Length > 0)
-                    {
-                        bInspectLongPart = false;// true;//long part
-                    }
-                    else bInspectLongPart = false;
-                    //move footer to work top
-                    int axis = 0;
-                    Single Pos5 = 0;
-                    if (bInspectLongPart && cntLongPart > 0)
-                    {
-
-                        Pos5 = master.Ax5_Work + upDwnFootWorkTopX.UpDownValue + (Single.Parse(txtPartLength.Text) - master.Length + LengthLUmax - Single.Parse(txtPartLengthU.Text));
-                    }
-                    else
-                    {
-                        Pos5 = master.Ax5_Work + upDwnFootWorkTopX.UpDownValue + (Single.Parse(txtPartLength.Text) - master.Length);
-                    }
-                    Single Pos1 = master.Ax1_Work + upDwnCam2z.UpDownValue;// - (Single.Parse(txtPartDiam.Text) - master.Diameter) / 2.0f;
-                    Single Pos2 = master.Ax2_Work;// + upDwnLamp1Z.UpDownValue;// - (Single.Parse(txtPartDiam.Text) - master.Diameter) / 2.0f;
-                    Single Pos4 = master.Ax4_Work + upDwnFootWorkR.UpDownValue;
-                    Single Pos3 = master.Ax3_Front + upDwnCam1x.UpDownValue; //master.Ax3_Work;
-                    //lamp1
-                    BitArray lamp = new BitArray(new bool[8]);
-                    lamp[0] = true; //lamp1
-                    byte[] Lamps = new byte[1];
-                    lamp.CopyTo(Lamps, 0);
-                    MyStatic.InitFini = false;
-
-                    Single speed = (int.Parse(txtSpeedSt.Text) * axis_Parameters[4].Ax_Vmax) / 100.0f;
-                    Single speed1 = (int.Parse(txtSpeedSt.Text) / 100.0f);
-                    if (FooterStationAct.AxisInAction) { InspectStationAct.VisionInAction = false; return; }
-                    FooterStationAct.AxisInAction = true;
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Beckhoff<= Move work" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-
-                    var task = Task.Run(() => MoveFooterWork(Pos5, speed, Pos1, Pos2, Pos4, speed1, Pos3, Lamps[0]));
-                    //-------vision init cycle-------------
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision<= Init Cycle" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                                      
-                    MyStatic.InitFini = true;
-                    
-                    await task;
-                    if (!task.Result.result)
-                    {
-
-                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> ERROR MOVE FOOTER TO WORK POSITION" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                        InspectStationAct.State[(int)InspectSt.VisionTop] = (int)MyStatic.E_State.TopSnapFini;
-                        InspectStationAct.Reject[(int)Reject.Beckhoff] = true;
-
-                        InspectStationAct.VisionInAction = false;
-                        MyStatic.bReset = true;
-                        MyStatic.bExitcycle = true;
-                        MyStatic.bExitcycleNow = true;
-                        ErrorMess = "ERROR MOVE FOOTER TO WORK!" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")";
-                        inv.settxt(lblInspect, "Vision Inspect Error Move");
-                        MessageBox.Show("ERROR MOVE FOOTER TO WORK POSITION! Exit cycle", "ERROR", MessageBoxButtons.OK,
-                                   MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
-                        FooterStationAct.AxisInAction = false;
-                        FooterStationAct.State = (int)MyStatic.E_State.InError;
-                        return;
-                    }
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Beckhoff=> fini Move work" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-
-                    if (task.Result.data.Length >= 9 && task.Result.data[8] != 1)
-                    {
-                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Beckhoff=> NO PART IN FOOTER" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                        ErrorMess = "NO PART IN FOOTER " + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")";
-                        InspectStationAct.Reject[(int)Reject.Beckhoff] = true;
-                        MyStatic.bExitcycleNow = true;
-                        return;
-                    }
-                    FooterStationAct.AxisInAction = false;
-                    FooterStationAct.State = (int)MyStatic.E_State.InWork;
-
-                    //move footer fini
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision<= Vision Top Run" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                    Thread.Sleep(9000);
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Vision Top Fini" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                    InspectStationAct.State[(int)InspectSt.VisionTop] = (int)MyStatic.E_State.TopSnapFini;
-                    InspectStationAct.Reject[(int)Reject.VisionTop] = false;
-
-                    InspectStationAct.VisionInAction = false;
-                    return;
-
-                        
-
-                }
-                    
-                
+                 
                 if (InspectStationAct.State[(int)InspectSt.Footer] == (int)MyStatic.E_State.Occupied &&
                     !InspectStationAct.VisionInAction &&
                     InspectStationAct.State[(int)InspectSt.VisionTop] != (int)MyStatic.E_State.TopSnapFini &&
@@ -1538,6 +1459,8 @@ namespace EndmillHMI
                 //!InspectStationAct.SuaInAction)
                 {
                     inv.settxt(lblInspect, "Vision Inspect");
+                    DeltaFront = 0;
+                    ErrorFront = 0;
                     InspectStationAct.VisionInAction = true;
                     if (txtPartLength.Text != "" && Single.Parse(txtPartLength.Text) - master.Length > 0)
                     {
@@ -1753,24 +1676,7 @@ namespace EndmillHMI
                     InspectStationAct.VisionInAction = false;
                     return;
                 }
-                //simulation
-                if (InspectStationAct.State[(int)InspectSt.VisionTop] == (int)MyStatic.E_State.TopSnapFini &&
-                    InspectStationAct.State[(int)InspectSt.VisionDiam] != (int)MyStatic.E_State.DiamFini &&
-                   !InspectStationAct.VisionInAction &&
-                   chkDiam.Checked &&
-                   chkVisionSim.Checked &&
-                   !FooterStationAct.AxisInAction)
-                {
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision<= Run Inspect Diameter" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                    InspectStationAct.VisionInAction = true;
-                    Thread.Sleep(6000);
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Inspect Diameter Fini" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                    InspectStationAct.State[(int)InspectSt.VisionDiam] = (int)MyStatic.E_State.DiamFini;
-
-                    InspectStationAct.VisionInAction = false;
-                    return;
-
-                }
+                
 
                 if (InspectStationAct.State[(int)InspectSt.VisionTop] == (int)MyStatic.E_State.TopSnapFini &&
                      InspectStationAct.State[(int)InspectSt.VisionDiam] != (int)MyStatic.E_State.DiamFini &&
@@ -1852,7 +1758,8 @@ namespace EndmillHMI
                     }
 
                 }
-                //-------------front cam2 after diam-----------------------
+                //-------------front cam2 after diam and color same time-----------------------
+                /*
                 if (InspectStationAct.State[(int)InspectSt.VisionDiam] == (int)MyStatic.E_State.DiamFini &&
                      InspectStationAct.State[(int)InspectSt.VisionFront] != (int)MyStatic.E_State.FrontSnapFini &&
                      InspectStationAct.State[(int)InspectSt.VisionTop] == (int)MyStatic.E_State.TopSnapFini &&
@@ -1864,32 +1771,8 @@ namespace EndmillHMI
                     InspectStationAct.VisionInAction = false;
                     return;
                 }
-                //simulation
-                if (InspectStationAct.State[(int)InspectSt.VisionDiam] == (int)MyStatic.E_State.DiamFini &&
-                   InspectStationAct.State[(int)InspectSt.VisionFront] != (int)MyStatic.E_State.FrontSnapFini &&
-                    InspectStationAct.State[(int)InspectSt.VisionTop] == (int)MyStatic.E_State.TopSnapFini &&
-                   !InspectStationAct.VisionInAction &&
-                   chkFront.Checked &&
-                    chkVisionSim.Checked &&
-                   !FooterStationAct.AxisInAction)
-                {
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision<= Run Check Color " + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision<= Run Check Front " + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                    InspectStationAct.VisionInAction = true;
-                    Thread.Sleep(4500);
-                    inv.settxt(lblInspect, "Vision Check Color Fini");
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Check Color Fini" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Check Front Fini" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                    InspectStationAct.State[(int)InspectSt.VisionColor] = (int)MyStatic.E_State.ColorFini;
-                    inv.settxt(lblInspect, "Vision Front Ready");
-                    nfrontCount = (int)upDwnCount.UpDownValue;
-                    InspectStationAct.VisionInAction = false;
-                    InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
-                    return;
-
-
-                }
-
+                */
+                /*
                 if (InspectStationAct.State[(int)InspectSt.VisionDiam] == (int)MyStatic.E_State.DiamFini &&
                     InspectStationAct.State[(int)InspectSt.VisionFront] != (int)MyStatic.E_State.FrontSnapFini &&
                      InspectStationAct.State[(int)InspectSt.VisionTop] == (int)MyStatic.E_State.TopSnapFini &&
@@ -2015,36 +1898,17 @@ namespace EndmillHMI
                     }
 
                 }
-                // -------------check color------------------------
-                //simulation
-                if //(InspectStationAct.State[(int)InspectSt.Weldone] == (int)MyStatic.E_State.WeldonFini &&
-                 (InspectStationAct.State[(int)InspectSt.VisionTop] == (int)MyStatic.E_State.TopSnapFini &&
-                  InspectStationAct.State[(int)InspectSt.VisionFront] == (int)MyStatic.E_State.FrontSnapFini &&
-                  InspectStationAct.State[(int)InspectSt.VisionDiam] == (int)MyStatic.E_State.DiamFini &&
-                   !InspectStationAct.VisionInAction &&
-                   InspectStationAct.State[(int)InspectSt.VisionColor] != (int)MyStatic.E_State.ColorFini &&
-                   !chkFront.Checked &&
-                   chkVisionSim.Checked)
-                {
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision<= Run2 Check Color " + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                    InspectStationAct.VisionInAction = true;
-                    Thread.Sleep(2000);
-                    inv.settxt(lblInspect, "Vision Check Color Fini");
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Check Color Fini" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                    inv.settxt(lblInspect, "Vision Check Color Ready");
-                    InspectStationAct.VisionInAction = false;
-                    InspectStationAct.State[(int)InspectSt.VisionColor] = (int)MyStatic.E_State.ColorFini;
-                    InspectStationAct.VisionInAction = false;
-                    return;
-                }
-
+                */
+                // -------------check color ------------------------
+                
                 if //(InspectStationAct.State[(int)InspectSt.Weldone] == (int)MyStatic.E_State.WeldonFini &&
                   (InspectStationAct.State[(int)InspectSt.VisionTop] == (int)MyStatic.E_State.TopSnapFini &&
-                   InspectStationAct.State[(int)InspectSt.VisionFront] == (int)MyStatic.E_State.FrontSnapFini &&
+                   //InspectStationAct.State[(int)InspectSt.VisionFront] == (int)MyStatic.E_State.FrontSnapFini &&
                    InspectStationAct.State[(int)InspectSt.VisionDiam] == (int)MyStatic.E_State.DiamFini &&
                     !InspectStationAct.VisionInAction &&
-                    InspectStationAct.State[(int)InspectSt.VisionColor] != (int)MyStatic.E_State.ColorFini &&
-                    !chkFront.Checked)
+                    InspectStationAct.State[(int)InspectSt.VisionColor] != (int)MyStatic.E_State.ColorFini)
+                    //&&
+                    //!chkFront.Checked)
                 {
                     InspectStationAct.VisionInAction = true;
                     if (chkColor.Checked)
@@ -2081,6 +1945,20 @@ namespace EndmillHMI
                         InspectStationAct.VisionInAction = false;
                     }
                 }
+                if //(InspectStationAct.State[(int)InspectSt.Weldone] == (int)MyStatic.E_State.WeldonFini &&
+                 (InspectStationAct.State[(int)InspectSt.VisionTop] == (int)MyStatic.E_State.TopSnapFini &&
+                  //InspectStationAct.State[(int)InspectSt.VisionFront] == (int)MyStatic.E_State.FrontSnapFini &&
+                  InspectStationAct.State[(int)InspectSt.VisionDiam] == (int)MyStatic.E_State.DiamFini &&
+                   !InspectStationAct.VisionInAction &&
+                   InspectStationAct.State[(int)InspectSt.VisionColor] != (int)MyStatic.E_State.ColorFini &&
+                   !chkColor.Checked)
+                {
+                    InspectStationAct.VisionInAction = true;
+                    
+                        InspectStationAct.State[(int)InspectSt.VisionColor] = (int)MyStatic.E_State.ColorFini;
+                        InspectStationAct.VisionInAction = false;
+                    
+                }
                 //move footer home after vision fiished
                 //move footer to home
                 if (InspectStationAct.State[(int)InspectSt.Weldone] == (int)MyStatic.E_State.WeldonFini &&
@@ -2089,6 +1967,7 @@ namespace EndmillHMI
                 InspectStationAct.State[(int)InspectSt.VisionDiam] == (int)MyStatic.E_State.DiamFini &&
                 InspectStationAct.State[(int)InspectSt.VisionColor] == (int)MyStatic.E_State.ColorFini &&
                 !InspectStationAct.VisionInAction &&
+                !InspectStationAct.VisionFrontInAction &&
                  !FooterStationAct.AxisInAction &&
                  FooterStationAct.State == (int)MyStatic.E_State.InWork)
                 {
@@ -2144,26 +2023,330 @@ namespace EndmillHMI
 
             }
         }
+        int ErrorFront = 0;
+        int ErrorFrontMax = 2;
+        Single FrontRotate = 0;
+         
+        private async void VisionFrontMainTask()
+        {
+            
+            try
+            {
+                if (InspectStationAct.VisionFrontInAction) return;
+                if (MyStatic.bReset) return;
+                if (FooterStationAct.State == (int)MyStatic.E_State.InError) return;
+                if (MyStatic.bExitcycleNow) return;
+                bool countOK = false;
 
-        //private void CheckDeviceReply(WebComm.CommReply reply, string sErrorMessageToDisplay)
-        //{
-        //    if (!reply.result || reply.status == "" || reply.status == null)
-        //    {
-        //        MessageBox.Show(sErrorMessageToDisplay + " \r" + reply.status);
-        //        return;
-        //    }
+               
+                //-------------front cam1 after diam -----------------------
+                if (InspectStationAct.State[(int)InspectSt.VisionDiam] == (int)MyStatic.E_State.DiamFini &&
+                     InspectStationAct.State[(int)InspectSt.VisionFront] != (int)MyStatic.E_State.FrontSnapFini &&
+                     InspectStationAct.State[(int)InspectSt.VisionTop] == (int)MyStatic.E_State.TopSnapFini &&
+                    !InspectStationAct.VisionFrontInAction &&
+                    !chkFront.Checked &&
+                    !chkInspectFront.Checked &&
+                    !FooterStationAct.AxisInAction)
+                {
+                    InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                    InspectStationAct.VisionFrontInAction = false;
+                    DeltaFront = 0;
+                    ErrorFront = 0;
+                    return;
+                }
 
-        //}
+                if (InspectStationAct.State[(int)InspectSt.VisionDiam] == (int)MyStatic.E_State.DiamFini &&
+                    InspectStationAct.State[(int)InspectSt.VisionFront] != (int)MyStatic.E_State.FrontSnapFini &&
+                     InspectStationAct.State[(int)InspectSt.VisionTop] == (int)MyStatic.E_State.TopSnapFini &&
+                    !InspectStationAct.VisionFrontInAction &&
+                    (chkFront.Checked || chkInspectFront.Checked) &&
+                    !FooterStationAct.AxisInAction)
+                {
 
-        //private void CheckDeviceReply(EndmillHMI.CommReply reply, string sErrorMessageToDisplay)
-        //{
-        //    if (!reply.result || reply.status == "" || reply.status == null)
-        //    {
-        //        MessageBox.Show(sErrorMessageToDisplay + " \r" + reply.status);
-        //        return;
-        //    }
+                    InspectStationAct.VisionFrontInAction = true;
+                    inv.settxt(lblInspect, "Vision Front");
+                    nfrontCount = 0;
+                    //camera1 on
+                    
+                    var task10 = Task.Run(() => FrontCamOnOff(1));
+                    await task10;
+                    WebComm.CommReply reply10 = task10.Result;
+                    Thread.Sleep(300);
+                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front<= Run Front1 " + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
 
-        //}
+                    //-----------first time---------------------
+                    DeltaFront = 0;
+                    var task1 = Task.Run(() => StartCycleInspectFront(DeltaFront, 1));
+                    await task1;
+                    WebComm.CommReply reply = task1.Result;
+
+                    if (reply.result)
+                    {
+                        inv.settxt(lblInspect, "Vision Front Fini");
+                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front1 Snap Fini" + "delta=" + DeltaFront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                        if (reply.comment != null && reply.comment.StartsWith("cmd"))
+                        {
+                            string s = reply.comment.Remove(0, 3);
+                            string[] ss = s.Split(',');
+                            if (ss.Length >= 4 && ss[0] == ((int)MyStatic.InspectCmd.FrontCamCount).ToString() && ss[1] == "1")
+                            {
+                                inv.settxt(lblInspect, "Vision Front1 Ready");
+                                nfrontCount = int.Parse(ss[2]);
+                                //InspectStationAct.VisionFrontInAction = false;
+                                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front1 Vision Count=" + nfrontCount.ToString()+" delta="+ DeltaFront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                                partData[InspectStationAct.OnFooterGrip3_PartID].Count = nfrontCount;
+                                if (nfrontCount == nFrontCountUpDwn)
+                                {
+                                    //InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                                    //InspectStationAct.Reject[(int)Reject.VisionCount] = false;
+                                    //InspectStationAct.VisionFrontInAction = false;
+                                    DeltaFront = 0;
+                                    ErrorFront = 0;
+                                    countOK = true;
+                                    //return;
+                                }
+                                
+
+
+
+                            }
+                            else
+                            {
+                                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front1 Vision Error1"   + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                                InspectStationAct.Reject[(int)InspectSt.VisionFront] = true;
+                            }
+                            
+                           
+                        }
+                       
+
+                    }
+                    else
+                    {
+                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front1 Vision Error2" +   "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                        InspectStationAct.Reject[(int)InspectSt.VisionFront] = true;
+                    }
+                    
+                    //-------------------------second time-----------------------
+                    Thread.Sleep(200);
+                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front<= Run Front2 " + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                    if (master.Ax4_Front + DeltaFront > 250) DeltaFront = DeltaFront - FrontRotate;//rotate 90 deg
+                    else DeltaFront = DeltaFront + FrontRotate;
+                    Single deltafront = DeltaFront;
+                    if (!countOK)
+                    {
+                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front<= Run Front2 count+snap" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                        var task2 = Task.Run(() => StartCycleInspectFront(deltafront, 2));
+                        await task2;
+                        WebComm.CommReply reply2 = task2.Result;
+
+                        if (reply2.result)
+                        {
+                            inv.settxt(lblInspect, "Vision Front Fini");
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front2 Snap Fini " + "delta=" + deltafront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                            //if (countOK)
+                            //{
+                            //    InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                            //    InspectStationAct.Reject[(int)Reject.VisionCount] = false;
+                            //    InspectStationAct.VisionFrontInAction = false;
+                            //    //DeltaFront = 0;
+                            //    ErrorFront = 0;
+                            //    //camera2 off
+                            //    //front camera off
+                            //    var task20 = Task.Run(() => FrontCamOnOff(0));
+                            //    await task20;
+                            //    WebComm.CommReply reply20 = task10.Result;
+                            //    return;
+                            //}
+
+                            if (reply2.comment != null && reply2.comment.StartsWith("cmd"))
+                            {
+                                string s = reply2.comment.Remove(0, 3);
+                                string[] ss = s.Split(',');
+                                if (ss.Length >= 4 && ss[0] == ((int)MyStatic.InspectCmd.FrontCamCount).ToString() && ss[1] == "1")
+                                {
+                                    inv.settxt(lblInspect, "Vision Front Ready");
+                                    nfrontCount = int.Parse(ss[2]);
+                                    //InspectStationAct.VisionFrontInAction = false;
+                                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front2 Vision Count=" + nfrontCount.ToString() + " delta=" + deltafront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                                    partData[InspectStationAct.OnFooterGrip3_PartID].Count = nfrontCount;
+                                    if (nfrontCount == nFrontCountUpDwn)
+                                    {
+                                        InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                                        InspectStationAct.Reject[(int)Reject.VisionCount] = false;
+                                        InspectStationAct.VisionFrontInAction = false;
+                                        //DeltaFront = 0;
+                                        ErrorFront = 0;
+                                        //camera1 off
+                                        //front camera off
+                                        var task30 = Task.Run(() => FrontCamOnOff(0));
+                                        await task30;
+                                        WebComm.CommReply reply30 = task10.Result;
+                                        return;
+                                    }
+                                    else
+                                    {
+                                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front2 Vision count Error1 " + "delta=" + DeltaFront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+
+                                        InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                                        InspectStationAct.Reject[(int)Reject.VisionCount] = true;
+                                        InspectStationAct.VisionFrontInAction = false;
+                                        ErrorFront = 0;
+                                        //camera1 off
+                                        //front camera off
+                                        var task40 = Task.Run(() => FrontCamOnOff(0));
+                                        await task40;
+                                        WebComm.CommReply reply40 = task10.Result;
+                                        return;
+
+                                    }
+
+
+
+                                }
+                                else
+                                {
+                                    inv.settxt(lblInspect, "Vision Front Reject");
+                                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front2 Vision Error2 " + "delta=" + deltafront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                                    //InspectStationAct.State = (int)MyStatic.E_State.RejectMeasure;
+
+                                    InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                                    //InspectStationAct.Reject[(int)Reject.VisionCount] = true;
+                                    InspectStationAct.Reject[(int)InspectSt.VisionFront] = true;
+                                    InspectStationAct.VisionFrontInAction = false;
+                                    ErrorFront = 0;
+                                    //camera1 off
+                                    //front camera off
+                                    var task50 = Task.Run(() => FrontCamOnOff(0));
+                                    await task50;
+                                    WebComm.CommReply reply50 = task10.Result;
+                                    return;
+
+
+
+                                }
+
+
+                            }
+                            else
+                            {
+                                inv.settxt(lblInspect, "Vision Front Reject");
+                                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Vision2 Error5" + "delta=" + deltafront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+
+                                InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                                //InspectStationAct.Reject[(int)Reject.VisionCount] = true;
+                                InspectStationAct.Reject[(int)InspectSt.VisionFront] = true;
+                                InspectStationAct.VisionFrontInAction = false;
+                                ErrorFront = 0;
+                                //camera1 off
+                                //front camera off
+                                var task60 = Task.Run(() => FrontCamOnOff(0));
+                                await task60;
+                                WebComm.CommReply reply60 = task10.Result;
+                                return;
+
+                            }
+
+                        }
+                        else
+                        {
+                            inv.settxt(lblInspect, "Vision Front Reject");
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front2 Reject" + "delta=" + deltafront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                            //InspectStationAct.State = (int)MyStatic.E_State.RejectMeasure;
+
+                            InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                            //InspectStationAct.Reject[(int)Reject.VisionCount] = true;
+                            InspectStationAct.Reject[(int)InspectSt.VisionFront] = true;
+                            InspectStationAct.VisionFrontInAction = false;
+                            ErrorFront = 0;
+                            //camera1 off
+                            //front camera off
+                            var task70 = Task.Run(() => FrontCamOnOff(0));
+                            await task70;
+                            WebComm.CommReply reply70 = task10.Result;
+                            return;
+
+                        }
+                    }
+                    else
+                    {
+                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front<= Run Front2 snap" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                        var task2 = Task.Run(() => StartSnapFront(deltafront));
+                        await task2;
+                        WebComm.CommReply reply2 = task2.Result;
+
+                        if (reply2.result)
+                        {
+                            inv.settxt(lblInspect, "Vision Front Fini");
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front2 Snap Fini" + "delta=" + deltafront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                           
+                                InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                                InspectStationAct.Reject[(int)Reject.VisionCount] = false;
+                                InspectStationAct.VisionFrontInAction = false;
+                                DeltaFront = 0;
+                                ErrorFront = 0;
+                                //camera1 off
+                                //front camera off
+                                var task20 = Task.Run(() => FrontCamOnOff(0));
+                                await task20;
+                                WebComm.CommReply reply20 = task10.Result;
+                                return;
+                            
+                        }
+                        else
+                        {
+                            inv.settxt(lblInspect, "Vision Front Snap Reject");
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front2 snap Error Reject" + "delta=" + deltafront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                            //InspectStationAct.State = (int)MyStatic.E_State.RejectMeasure;
+
+                            InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                            //InspectStationAct.Reject[(int)Reject.VisionCount] = true;
+                            InspectStationAct.Reject[(int)InspectSt.VisionFront] = true;
+                            InspectStationAct.VisionFrontInAction = false;
+                            ErrorFront = 0;
+                            //camera1 off
+                            //front camera off
+                            var task70 = Task.Run(() => FrontCamOnOff(0));
+                            await task70;
+                            WebComm.CommReply reply70 = task10.Result;
+                            return;
+
+                        }
+                    }
+                }
+               
+               
+            }
+            catch (Exception ex)
+            {
+                MyStatic.bExitcycleNow = true;
+                frmMain.newFrmMain.ListAdd3("VisionFront => ERROR " + ex.Message + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false);
+                ErrorMess = "Vision Front=> ERROR " + ex.Message + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")";
+                MyStatic.bExitcycle = true;
+                MyStatic.bExitcycleNow = true;
+
+            }
+        }
+
+        private void CheckDeviceReply(WebComm.CommReply reply, string sErrorMessageToDisplay)
+        {
+            if (!reply.result || reply.status == "" || reply.status == null)
+            {
+                MessageBox.Show(sErrorMessageToDisplay + " \r" + reply.status);
+                return;
+            }
+
+        }
+
+        private void CheckDeviceReply(EndmillHMI.CommReply reply, string sErrorMessageToDisplay)
+        {
+            if (!reply.result || reply.status == "" || reply.status == null)
+            {
+                MessageBox.Show(sErrorMessageToDisplay + " \r" + reply.status);
+                return;
+            }
+
+        }
 
 
         private async void CognexMainTask()
@@ -2176,24 +2359,7 @@ namespace EndmillHMI
                 if (MyStatic.bExitcycleNow) return;
                 //int wasState = 0;
                 //-------------inspect top-----------------------
-                //simulation
-                if (InspectStationAct.State[(int)InspectSt.Footer] == (int)MyStatic.E_State.Occupied &&
-                    FooterStationAct.State == (int)MyStatic.E_State.InWork &&
-                    chkVisionSim.Checked &&
-                    InspectStationAct.State[(int)InspectSt.SuaTop] != (int)MyStatic.E_State.SuaFini &&
-                !InspectStationAct.SuaInAction )
-                {
-                    InspectStationAct.SuaInAction = true;
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex<= Run Top Inspect" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                    Thread.Sleep(11000);
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex=> Top Inspect fini" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                    InspectStationAct.SuaState = (int)MyStatic.E_State.SuaFini;
-                    InspectStationAct.State[(int)InspectSt.SuaTop] = (int)MyStatic.E_State.SuaFini;
-                    inv.settxt(lblInspect, "Cognex Ready");
-                    InspectStationAct.Reject[(int)Reject.SuaTop] = false;
-                    InspectStationAct.SuaInAction = false;
-                    return;
-                }
+                
 
                 if (InspectStationAct.State[(int)InspectSt.Footer] == (int)MyStatic.E_State.Occupied &&
                     FooterStationAct.State == (int)MyStatic.E_State.InWork &&
@@ -2322,23 +2488,7 @@ namespace EndmillHMI
                 }
 
                 //-----------------front inspection--------------------------------------------------
-                //simulation
-                if (//chkInspectFront.Checked &&
-                   InspectStationAct.State[(int)InspectSt.VisionFront] == (int)MyStatic.E_State.FrontSnapFini &&
-                   chkVisionSim.Checked &&
-                   InspectStationAct.State[(int)InspectSt.SuaFront] != (int)MyStatic.E_State.SuaFrontFini &&
-               !InspectStationAct.SuaInAction)
-                {
-                    InspectStationAct.SuaInAction = true;
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex<= Run front Inspect" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                    Thread.Sleep(2000);
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex=> Front Inspect Fini" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                    InspectStationAct.SuaState = (int)MyStatic.E_State.SuaFrontFini;
-                    InspectStationAct.State[(int)InspectSt.SuaFront] = (int)MyStatic.E_State.SuaFrontFini;
-                    InspectStationAct.SuaInAction = false;
-                    return;
-                }
-
+                
                 if (//chkInspectFront.Checked &&
                     InspectStationAct.State[(int)InspectSt.VisionFront] == (int)MyStatic.E_State.FrontSnapFini &&
                     !chkVisionSim.Checked &&
@@ -2353,22 +2503,24 @@ namespace EndmillHMI
                         return;
                     }
 
-
+                    //------------------inspect first front---------------
                     InspectStationAct.SuaInAction = true;
-                    inv.settxt(lblInspect, "Run Cognex Front");
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex<= Run Inspect Front" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-
-                    var task20 = Task.Run(() => InspectFront());
+                    inv.settxt(lblInspect, "Run Cognex Front1");
+                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex<= Run Inspect Front1" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+            
+                    int bmpnum = 1;//bmp snap-inspect 2-snap-inspect_Prev
+                    var task20 = Task.Run(() => InspectFront(bmpnum));
                     await task20;
 
                     WebComm.CommReply fini20 = task20.Result;
                     if (!fini20.result)
                     {
-                        InspectStationAct.State[(int)InspectSt.SuaFront] = (int)MyStatic.E_State.SuaFrontFini;
-                        InspectStationAct.SuaState = (int)MyStatic.E_State.SuaFrontFini;
+                        //InspectStationAct.State[(int)InspectSt.SuaFront] = (int)MyStatic.E_State.SuaFrontFini;
+                        //InspectStationAct.SuaState = (int)MyStatic.E_State.SuaFrontFini;
                         InspectStationAct.Reject[(int)Reject.SuaFront] = true;
-                        InspectStationAct.SuaInAction = false;
+                        //InspectStationAct.SuaInAction = false;
                         string status = fini20.comment;
+                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex=> Inspect Front1 Finished Reject or error"  + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
 
                     }
                     else
@@ -2380,9 +2532,64 @@ namespace EndmillHMI
                         // rep1.status = ss[2] + "," + ss[3];
                         if (int.Parse(ss[2]) == 0 && int.Parse(ss[3]) == 0)//ss[2] breaks; ss[3] peels
                         {
+                            //InspectStationAct.SuaState = (int)MyStatic.E_State.SuaFrontFini;
+                            //InspectStationAct.State[(int)InspectSt.SuaFront] = (int)MyStatic.E_State.SuaFrontFini;
+                            //InspectStationAct.SuaInAction = false;
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex=> Inspect Front1 Finished" +  " breaks:"+ss[2]+ " peels:"+ss[3] + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                        }
+                        else
+                        {
+                            //InspectStationAct.SuaState = (int)MyStatic.E_State.SuaFrontFini;//ss[2]=break count,ss[3]=peels count
+                            InspectStationAct.Reject[(int)Reject.SuaFront] = true;
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex=> Inspect Front1 Finished" + " breaks:" + ss[2] + " peels:" + ss[3] + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                            //InspectStationAct.State[(int)InspectSt.SuaFront] = (int)MyStatic.E_State.SuaFrontFini;
+                            //InspectStationAct.SuaInAction = false;
+                            //GetReject(RejectPartId, PartIndex, (int)MyStatic.E_State.Reject, "", status, "", fini1.comment, true);
+                        }
+
+
+                    }
+
+                   
+
+
+
+                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex=> Inspect Front1 Finished" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+
+
+                    //------------------inspect second front---------------
+                    InspectStationAct.SuaInAction = true;
+                    inv.settxt(lblInspect, "Run Cognex Front2");
+                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex<= Run Inspect Front2" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+
+                    bmpnum = 2;//bmp snap-inspect 2-snap-inspect_Prev
+                    var task21 = Task.Run(() => InspectFront(bmpnum));
+                    await task21;
+
+                    WebComm.CommReply fini21 = task20.Result;
+                    if (!fini21.result)
+                    {
+                        InspectStationAct.State[(int)InspectSt.SuaFront] = (int)MyStatic.E_State.SuaFrontFini;
+                        InspectStationAct.SuaState = (int)MyStatic.E_State.SuaFrontFini;
+                        InspectStationAct.Reject[(int)Reject.SuaFront] = true;
+                        InspectStationAct.SuaInAction = false;
+                        string status = fini21.comment;
+                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex=> Inspect Front2 Finished Reject or error"+ "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+
+                    }
+                    else
+                    {
+                        string status = fini21.comment;
+                        if (chkSuaNoReject.Checked) status = "0,0";//debug
+
+                        string[] ss = status.Split(',');
+                        // rep1.status = ss[2] + "," + ss[3];
+                        if (int.Parse(ss[2]) == 0 && int.Parse(ss[3]) == 0)//ss[2] breaks; ss[3] peels
+                        {
                             InspectStationAct.SuaState = (int)MyStatic.E_State.SuaFrontFini;
                             InspectStationAct.State[(int)InspectSt.SuaFront] = (int)MyStatic.E_State.SuaFrontFini;
                             InspectStationAct.SuaInAction = false;
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex=> Inspect Front2 Finished" + " breaks:" + ss[2] + " peels:" + ss[3] + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                         }
                         else
                         {
@@ -2390,53 +2597,13 @@ namespace EndmillHMI
                             InspectStationAct.Reject[(int)Reject.SuaFront] = true;
                             InspectStationAct.State[(int)InspectSt.SuaFront] = (int)MyStatic.E_State.SuaFrontFini;
                             InspectStationAct.SuaInAction = false;
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex=> Inspect Front2 Finished" + " breaks:" + ss[2] + " peels:" + ss[3] + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                             //GetReject(RejectPartId, PartIndex, (int)MyStatic.E_State.Reject, "", status, "", fini1.comment, true);
                         }
 
 
                     }
-
-                    //bool bTake2FrontSnapsAndInspections = true;
-                    //if (bTake2FrontSnapsAndInspections)
-                    //{
-                    //    //Rotate Footer around the R axis for 135 deg
-                    //    int axis = 4;
-                    //    Single Speed = AxStatus[axis - 1].Vmax;
-                    //    Single speed = Speed * Single.Parse(txtSpeedSt.Text) / 100;
-
-
-                    //    var task1 = Task.Run(() => RunCurrPosCams(axis));
-
-                    //    await task1;
-                    //    //what's that for SHURA???
-                    //    //CommReply reply = new CommReply();
-                    //    //reply.result = false;
-                    //    var reply = task1.Result;
-                    //    CheckDeviceReply(reply, "Error when checking current Footer Rotation in Cognex Main Task");
-
-                    //    Single dist = 135;
-
-                    //    if (reply.data[5] > 180)
-                    //        dist = -135;
-
-                    //    var task21 = Task.Run(() => MoveRelSt(axis, dist, speed));
-                    //    await task21;
-
-                    //    CheckDeviceReply(task21.Result,"Error when going to 2nd rotation");
-
-                    //    Thread.Sleep(200);
-                    //    //await task22;
-
-                    //    var task23 = Task.Run(() => InspectFront());
-                    //    await task23;
-
-                    //    CheckDeviceReply(task23.Result, "Error when doing 2nd front inspetion");
-
-                    //}
-
-
-
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex=> Inspect Front Finished" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Cognex=> Inspect Front2 Finished" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                 }
 
 
@@ -3919,6 +4086,7 @@ namespace EndmillHMI
                 panel5.Enabled = state;
                 panel8.Enabled = state;
                 panel3.Enabled = state;
+                btnPutInspect.Enabled = state;
 
             }
             else
@@ -4212,9 +4380,12 @@ namespace EndmillHMI
                 RobotLoadAct.InAction = false;
                 InspectStationAct.InAction = false;
                 InspectStationAct.VisionInAction = false;
+                InspectStationAct.VisionFrontInAction = false;
                 InspectStationAct.SuaInAction = false;
                 FooterStationAct.AxisInAction = false;
                 InspectStationAct.WeldonInAction = false;
+                DeltaFront = 0;
+                ErrorFront = 0;
                 MyStatic.InitFini = false;
                 inv.set(btnRobotStart, "BackColor", Color.LightGray);
                 inv.set(btnCheckDiam, "Enabled", true);
@@ -5860,46 +6031,7 @@ namespace EndmillHMI
                 int id = 0;//base position
                 int teach = 0;
                 action = 0;
-                //if (chkStep.Checked)
-                //{
-                //    try
-                //    {
-                //        if (WV2 != null && WV2.CoreWebView2 != null)
-                //        {
-                //           // WV2.CoreWebView2.NavigateToString(urlrobot1 + "panel10.stm");
-                //            WV2.Source = new Uri(urlrobot1 + "panel10.stm");
-                //            //WV2.Scale(0.5f);
-                //            //WV2.Show();
-                //        }
-                //        //WB2.AllowNavigation = true;
-                //        //WB2.Dock = DockStyle.Fill;
-                //        //WB2.Document.Body.Style = "zoom:20";
-                //        //WB2.Navigate(urlrobot1 + "panel10.stm");//show fanuc form
-                //        //WB2.Update();
-                //    }
-                //    catch (Exception ex)
-                //    {
-                //        //MessageBox.Show("error Robot:" + ex.Message);
-                //        //WB2.Stop();
-
-                //        WV2.Source = new Uri("about:blank");
-                //    }
-
-                //}
-                //else
-                //{
-                //    try
-                //    {
-
-                //        WV2.Source = new Uri("about:blank");
-                //    }
-                //    catch (Exception ex)
-                //    {
-                //        //MessageBox.Show("error Robot:" + ex.Message);
-                //        //WB2.Stop();
-                //        //WB2.Url = new Uri("about:blank");
-                //    }
-                //}
+                
 
                 if (cmbSingleMove.Text == "Pick Tray") action = 1;
                 else if (cmbSingleMove.Text == "Place Inspection") action = 2;
@@ -9109,6 +9241,8 @@ namespace EndmillHMI
 
         private void txtMess_DoubleClick(object sender, EventArgs e)
         {
+            
+            WriteToFile(Path.GetDirectoryName(System.Windows.Forms.Application.ExecutablePath) + "\\AutomationIni\\Log\\Beckhofflog " + DateTime.Now.ToString("yyyy-MM-dd HH") + ".ini", txtMess.Text);
             inv.settxt(txtMess, "");
         }
 
@@ -11655,27 +11789,34 @@ private bool LoadItemData(string file)
 
         private async void btnSaveOrder_Click(object sender, EventArgs e)
         {
-            nDiameterCheck = (int)upDwnNdiam.UpDownValue;
-            if(!chkFront.Checked) chkInspectFront.Checked = false;
-            LoadTray(cmbTray.Text);
-            SaveItem();
-            //send data to vision
+            try
+            {
+                nDiameterCheckUpDwn = (int)upDwnNdiam.UpDownValue;
+                nFrontCountUpDwn = (int)upDwnCount.UpDownValue;
+                nColorUpDwn = (int)upDwnColor.UpDownValue;
+                FrontRotate = Single.Parse(txtFrontRotate.Text);
+                if (!chkFront.Checked) chkInspectFront.Checked = false;
+                LoadTray(cmbTray.Text);
+                SaveItem();
+                //send data to vision
 
-            //WC1.SetControls1(txtClient, this, null, "VisionComm", CameraAddr);
-            var task1 = Task.Run(() => DataVisionSave());
-            await task1;
-            WebComm.CommReply reply = task1.Result;
-            if (!reply.result)
-            {
-                MessageBox.Show("ERROR SEND DATA TO VISION!");
+                //WC1.SetControls1(txtClient, this, null, "VisionComm", CameraAddr);
+                var task1 = Task.Run(() => DataVisionSave());
+                await task1;
+                WebComm.CommReply reply = task1.Result;
+                if (!reply.result)
+                {
+                    MessageBox.Show("ERROR SEND DATA TO VISION!");
+                }
+                var task2 = Task.Run(() => DataFrontSave());
+                await task2;
+                reply = task2.Result;
+                if (!reply.result)
+                {
+                    MessageBox.Show("ERROR SEND DATA TO Front!");
+                }
             }
-            var task2 = Task.Run(() => DataFrontSave());
-            await task2;
-            reply = task2.Result;
-            if (!reply.result)
-            {
-                MessageBox.Show("ERROR SEND DATA TO Front!");
-            }
+            catch(Exception ex) { MessageBox.Show("ERROR SAVE DATA!"); }
         }
 
         private async void btnLoadOrder_Click(object sender, EventArgs e)
@@ -11721,6 +11862,14 @@ private bool LoadItemData(string file)
 
                 }
                 inv.settxt(txtWeldonAngle, weldone.angle.ToString("0.0"));
+                Thread.Sleep(200);
+                nDiameterCheckUpDwn = (int)upDwnNdiam.UpDownValue;
+                nFrontCountUpDwn = (int)upDwnCount.UpDownValue;
+                nColorUpDwn = (int)upDwnColor.UpDownValue;
+                FrontRotate = Single.Parse(txtFrontRotate.Text);
+                if (!chkFront.Checked) chkInspectFront.Checked = false;
+                LoadTray(cmbTray.Text);
+                SaveItem();
 
                 //send data to vision
 
@@ -11774,6 +11923,8 @@ private bool LoadItemData(string file)
                 if (partData != null) partData[RobotLoadAct.OnGrip2_PartID].Position = (int)MyStatic.E_State.OnGrip1;
                 InspectStationAct.WeldonState = 0;
                 InspectStationAct.SuaState = 0;
+                DeltaFront = 0;
+                ErrorFront = 0;
 
                 RefreshLables();
             }
@@ -13924,7 +14075,9 @@ private bool LoadItemData(string file)
             }
             catch (Exception ex) { MessageBox.Show("ERROR CHECK DIAMETER! " + ex.Message); inv.set(btnCheckDiam, "Enabled", true); }
         }
-        int nDiameterCheck = 2;
+        int nDiameterCheckUpDwn = 2;
+        int nFrontCountUpDwn = 0;
+        int nColorUpDwn = 0;
         Single Cam1xFocusOffset = 0;
         //Double kRightEdge = 1; 
         Single VisionDiam = 0;
@@ -13938,7 +14091,7 @@ private bool LoadItemData(string file)
             rep1.data = new Single[10];
             try
             {
-                nDiameterCheck = (int)upDwnNdiam.UpDownValue;
+                nDiameterCheckUpDwn = (int)upDwnNdiam.UpDownValue;
                 
                 //move footer to diam
                 int axis = 0;
@@ -14018,10 +14171,10 @@ private bool LoadItemData(string file)
                 
 
                 Single rot = 0;
-                Single[] diam = new Single[nDiameterCheck+3];
-                Single[] RightEdge = new Single[nDiameterCheck+3];
-                int nDiameterCheckTest = nDiameterCheck;
-                for (int i = 0; i < nDiameterCheck; i++)
+                Single[] diam = new Single[nDiameterCheckUpDwn+3];
+                Single[] RightEdge = new Single[nDiameterCheckUpDwn+3];
+                int nDiameterCheckTest = nDiameterCheckUpDwn;
+                for (int i = 0; i < nDiameterCheckUpDwn; i++)
                 {
 
                     if (curr_rot > 265) //rotate back
@@ -14074,8 +14227,8 @@ private bool LoadItemData(string file)
                             RightEdge[i] = Single.Parse(temp[3]);
                             if (diam[i] == null || Math.Abs(diam[i] - Single.Parse(txtPartDiam.Text)) > 2.0f)
                             {
-                                nDiameterCheck++;
-                                if (nDiameterCheck > nDiameterCheckTest + 2)
+                                nDiameterCheckUpDwn++;
+                                if (nDiameterCheckUpDwn > nDiameterCheckTest + 2)
                                 {
                                     Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> ERROR0 DIAMETER" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                                    
@@ -14091,7 +14244,7 @@ private bool LoadItemData(string file)
                                     return rep1;
                                 }
                             }
-                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> DIAMETER=" + temp[2] + " RightEdge = " + temp[3] + " n =" + nDiameterCheck.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> DIAMETER=" + temp[2] + " RightEdge = " + temp[3] + " n =" + nDiameterCheckUpDwn.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                             if (i == 0) { inv.settxt(lblD1, diam[0].ToString()); inv.settxt(lblOf1, RightEdge[0].ToString()); }
                             else if (i == 1) { inv.settxt(lblD2, diam[1].ToString()); inv.settxt(lblOf2, RightEdge[1].ToString()); }
                         }
@@ -14110,7 +14263,7 @@ private bool LoadItemData(string file)
                 Single D = 0;
                 Single Fr = 0;
                 int n = 0;
-                for (int i = 0; i < nDiameterCheck; i++)
+                for (int i = 0; i < nDiameterCheckUpDwn; i++)
                 {
                     
                     if (diam[i] != 0 && RightEdge[i] != 0 && Math.Abs(diam[i] - Single.Parse(txtPartDiam.Text)) < 2.0f)
@@ -14149,11 +14302,11 @@ private bool LoadItemData(string file)
                     //Cam1x_fosus = Cam1x_master_focus + Cam1xFocusOffset;
                     FooterStationAct.AxisInAction = false;
                     FooterStationAct.State = (int)MyStatic.E_State.InWork;
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> DIAMETER Av =" + D.ToString() + " RightEdge = " + Fr.ToString() + " n =" + nDiameterCheck.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> DIAMETER Av =" + D.ToString() + " RightEdge = " + Fr.ToString() + " n =" + nDiameterCheckUpDwn.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                     VisionDiam = D;
                     rep1.data[0] = D;
                     rep1.data[1] = Cam1xFocusOffset;
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> DIAMETER Av=" + rep1.data[0].ToString() + " Cam1xFocusOffset = " + rep1.data[1].ToString() + " n =" + nDiameterCheck.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> DIAMETER Av=" + rep1.data[0].ToString() + " Cam1xFocusOffset = " + rep1.data[1].ToString() + " n =" + nDiameterCheckUpDwn.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                     rep1.result = false;
                     return rep1;
                 }
@@ -14174,10 +14327,10 @@ private bool LoadItemData(string file)
                 //Cam1x_fosus = Cam1x_master_focus + Cam1xFocusOffset;
                 FooterStationAct.AxisInAction = false;
                 FooterStationAct.State = (int)MyStatic.E_State.InWork;
-                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> DIAMETER Av =" + D.ToString() + " RightEdge = " + Fr.ToString() + " n =" + nDiameterCheck.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> DIAMETER Av =" + D.ToString() + " RightEdge = " + Fr.ToString() + " n =" + nDiameterCheckUpDwn.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                 rep1.data[0] = D;
                 rep1.data[1] = Cam1xFocusOffset;
-                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> DIAMETER Av=" + rep1.data[0].ToString() + " Cam1xFocusOffset = " + rep1.data[1].ToString() + " n =" + nDiameterCheck.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> DIAMETER Av=" + rep1.data[0].ToString() + " Cam1xFocusOffset = " + rep1.data[1].ToString() + " n =" + nDiameterCheckUpDwn.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                 return rep1;
 
             }
@@ -16950,7 +17103,7 @@ private bool LoadItemData(string file)
                 if (chkVisionSim.Checked) return;
                 inv.set(panel10, "Enabled", false);
 
-                var task1 = Task.Run(() => StartCycleInspectFront());
+                var task1 = Task.Run(() => StartCycleInspectFront(0, 1));
                 await task1;
                 WebComm.CommReply reply = task1.Result;
                 if (reply.result)
@@ -16970,31 +17123,32 @@ private bool LoadItemData(string file)
             }
             catch (Exception ex) { MessageBox.Show("ERROR CHECK Front View! " + ex.Message); inv.set(panel10, "Enabled", true); }
         }
-        private async Task<WebComm.CommReply> StartCycleInspectFront()
+        Single DeltaFront = 0;
+        private async Task<WebComm.CommReply> StartCycleInspectFront(Single deltaFront, int snap)
         {
 
             WebComm.CommReply reply = new WebComm.CommReply();
             WebComm.CommReply rep1 = new WebComm.CommReply();
             rep1.result = true;
             rep1.data = new Single[10];
-            Single delta = 0;
+            
             try
             {
-
-                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision<=  MOVE  TO front POSITION" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                
+                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front<=  MOVE  TO front POSITION" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                 //move cam1 to front
                 Thread.Sleep(500);
-                for (int i = 0; i < 2; i++)
-                {
+                //for (int i = 0; i < 1; i++)
+                //{
                     if (Cam1xFocusOffset == null || Cam1xFocusOffset == Double.NaN)
                     {
                         Cam1xFocusOffset = 0;
-                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> ERROR focus offset" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> ERROR focus offset" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                     }
                     Single Pos5 = master.Ax5_Front + upDwnFootWorkFrontX.UpDownValue - Cam1xFocusOffset + (Single.Parse(txtPartLength.Text) - master.Length);
                     Single Pos1 = master.Ax1_Work + upDwnCam2z.UpDownValue;// - (Single.Parse(txtPartDiam.Text) - master.Diameter) / 2.0f;
                     Single Pos2 = master.Ax2_Work;// - (Single.Parse(txtPartDiam.Text) - master.Diameter) / 2.0f;
-                    Single Pos4 = master.Ax4_Front + delta;// + upDwnFootWorkR.UpDownValue;
+                    Single Pos4 = master.Ax4_Front + deltaFront;// + upDwnFootWorkR.UpDownValue;
                     Single Pos3 = master.Ax3_Front + upDwnCam1x.UpDownValue;
                     //lamp1
                     BitArray lamp = new BitArray(new bool[8]);
@@ -17009,7 +17163,7 @@ private bool LoadItemData(string file)
                     await task;
                     if (!task.Result.result)
                     {
-                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> ERROR MOVE  TO front POSITION" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> ERROR MOVE  TO front POSITION" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                         InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
                         InspectStationAct.Reject[(int)Reject.Beckhoff] = true;
 
@@ -17024,44 +17178,46 @@ private bool LoadItemData(string file)
 
                     }
 
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision<=  FINI MOVE  TO front POSITION" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=>  FINI MOVE  TO front POSITION" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
 
                     Thread.Sleep(20);
-                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision<= Front Count inspection" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front<= Front Count inspection" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                     FooterStationAct.AxisInAction = false;
-                    var task6 = Task.Run(() => FrontCamCount());
+                    var task6 = Task.Run(() => FrontCamCount(snap));
                     await task6;
                     reply = task6.Result;
                     if (reply.result && reply.comment != null && reply.comment != "")
                     {
 
                         reply.result = true;
-                        string s = reply.comment.Remove(0, 3);
-                        string[] ss = s.Split(',');
-                        if (ss.Length >= 4 && ss[0] == ((int)MyStatic.InspectCmd.FrontCamCount).ToString() && ss[1] == "1" && int.Parse(ss[2]) == upDwnCount.UpDownValue)
-                        {
-                            inv.settxt(lblInspect, "Vision Front Ready");
-                            reply.result = true;
-                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Front Count fini" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                            return reply;
+                        //string s = reply.comment.Remove(0, 3);
+                        //string[] ss = s.Split(',');
+                        //if (ss.Length >= 4 && ss[0] == ((int)MyStatic.InspectCmd.FrontCamCount).ToString() && ss[1] == "1" && int.Parse(ss[2]) == upDwnCount.UpDownValue)
+                        //{
+                        //    inv.settxt(lblInspect, "Vision Front Ready");
+                        //    reply.result = true;
+                        //    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front Count fini" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                        //    return reply;
 
-                        }
-                        else
-                        {
-                            if(master.Ax4_Front + delta > 250) delta = delta - 80.0f;//rotate 90 deg
-                            else delta = delta + 80.0f;
-                        }
+                        //}
+                        //else
+                        //{
+                        //    //if(master.Ax4_Front + deltaFront > 250) deltaFront = deltaFront - 80.0f;//rotate 90 deg
+                        //    //else deltaFront = deltaFront + 80.0f;
+                        //    reply.result = false;
+                        //    return reply;
+                        //}
                     }
                     else
                     {
                         reply.result = false;
                         return reply;
                     }
-                }
+                //}
 
 
-
-                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Front Count fini" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+               
+                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front Count fini" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
 
                 return reply;
 
@@ -17071,6 +17227,96 @@ private bool LoadItemData(string file)
                 reply.result = false;
 
                 MessageBox.Show("Vision front ERROR:" + err.Message);
+                return reply;
+            }
+        }
+        private async Task<WebComm.CommReply> StartSnapFront(Single deltaFront)
+        {
+
+            WebComm.CommReply reply = new WebComm.CommReply();
+            WebComm.CommReply rep1 = new WebComm.CommReply();
+            rep1.result = true;
+            rep1.data = new Single[10];
+
+            try
+            {
+
+                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front<=  MOVE  TO front POSITION" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                //move cam1 to front
+                Thread.Sleep(500);
+                //for (int i = 0; i < 1; i++)
+                //{
+                if (Cam1xFocusOffset == null || Cam1xFocusOffset == Double.NaN)
+                {
+                    Cam1xFocusOffset = 0;
+                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> ERROR focus offset" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                }
+                Single Pos5 = master.Ax5_Front + upDwnFootWorkFrontX.UpDownValue - Cam1xFocusOffset + (Single.Parse(txtPartLength.Text) - master.Length);
+                Single Pos1 = master.Ax1_Work + upDwnCam2z.UpDownValue;// - (Single.Parse(txtPartDiam.Text) - master.Diameter) / 2.0f;
+                Single Pos2 = master.Ax2_Work;// - (Single.Parse(txtPartDiam.Text) - master.Diameter) / 2.0f;
+                Single Pos4 = master.Ax4_Front + deltaFront;// + upDwnFootWorkR.UpDownValue;
+                Single Pos3 = master.Ax3_Front + upDwnCam1x.UpDownValue;
+                //lamp1
+                BitArray lamp = new BitArray(new bool[8]);
+                lamp[1] = true; //lamp2
+                byte[] Lamps = new byte[1];
+                lamp.CopyTo(Lamps, 0);
+
+
+                Single speed = (int.Parse(txtSpeedSt.Text) * axis_Parameters[4].Ax_Vmax) / 100.0f;
+                Single speed1 = (int.Parse(txtSpeedSt.Text) / 100.0f);
+                var task = Task.Run(() => MoveFooterWork(Pos5, speed, Pos1, Pos2, Pos4, speed1, Pos3, Lamps[0]));
+                await task;
+                if (!task.Result.result)
+                {
+                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> ERROR MOVE  TO front POSITION" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                    InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                    InspectStationAct.Reject[(int)Reject.Beckhoff] = true;
+
+                    MyStatic.bExitcycle = true;
+                    MyStatic.bExitcycleNow = true;
+                    ErrorMess = "ERROR MOVE TO FRONT POSITION!" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")";
+
+                    FooterStationAct.AxisInAction = false;
+                    FooterStationAct.State = (int)MyStatic.E_State.InError;
+                    reply.result = false;
+                    return reply;
+
+                }
+
+                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=>  FINI MOVE  TO front POSITION" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+
+                Thread.Sleep(20);
+                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front<= Front Snap for inspection" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                FooterStationAct.AxisInAction = false;
+                var task6 = Task.Run(() => FrontCamSnap());
+                await task6;
+                reply = task6.Result;
+                //if (reply.result)
+                //{
+
+                //    reply.result = true;
+                    
+                //}
+                //else
+                //{
+                //    reply.result = false;
+                //    return reply;
+                //}
+                //}
+
+
+
+                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front Snap fini" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+
+                return reply;
+
+            }
+            catch (Exception err)
+            {
+                reply.result = false;
+
+                MessageBox.Show("Vision front snap ERROR:" + err.Message);
                 return reply;
             }
         }
@@ -17231,7 +17477,8 @@ private bool LoadItemData(string file)
                 Parms.SendParm[0] = (Single)MyStatic.InspectCmd.FrontCamSnap;
                 rep1 = WC2.RunCmd(Parms);
 
-                if (!rep1.result) MessageBox.Show("FRONT CAMERA SNAP ERROR!", "ERROR", MessageBoxButtons.OK,
+                if (!rep1.result) 
+                    MessageBox.Show("FRONT CAMERA SNAP ERROR!", "ERROR", MessageBoxButtons.OK,
                                MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
 
 
@@ -17248,7 +17495,7 @@ private bool LoadItemData(string file)
                 return reply;
             }
         }
-        private WebComm.CommReply FrontCamCount()
+        private WebComm.CommReply FrontCamCount(int snap)
         {
 
             WebComm.CommReply reply = new WebComm.CommReply();
@@ -17262,10 +17509,11 @@ private bool LoadItemData(string file)
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.FrontCamCount;
                 Parms.comment = "FrontCamCount";
                 Parms.timeout = 5;
-                Array.Resize<Single>(ref Parms.SendParm, 3);
+                Array.Resize<Single>(ref Parms.SendParm, 4);
                 //16
                 Parms.SendParm[1] = 1;// general speed
-                Parms.SendParm[2] = 5.0f;// 0.5f;//timeout
+                Parms.SendParm[2] = snap;// 1- snap-inspect,2- snap-inspect_Prev
+                Parms.SendParm[3] = 5.0f;// 0.5f;//timeout
                 WebComm.CommReply rep1 = new WebComm.CommReply();
 
                 Parms.SendParm[0] = (Single)MyStatic.InspectCmd.FrontCamCount;
@@ -17289,6 +17537,7 @@ private bool LoadItemData(string file)
                 return reply;
             }
         }
+        
         private WebComm.CommReply FrontCamOnOff(int On)
         {
 
@@ -17329,7 +17578,7 @@ private bool LoadItemData(string file)
                 return reply;
             }
         }
-        private WebComm.CommReply InspectFront()
+        private WebComm.CommReply InspectFront(int bmpnum)
         {
 
             WebComm.CommReply reply = new WebComm.CommReply();
@@ -17343,10 +17592,11 @@ private bool LoadItemData(string file)
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.CognexFront;
                 Parms.comment = "Inspect Front";
                 Parms.timeout = 5;
-                Array.Resize<Single>(ref Parms.SendParm, 3);
+                Array.Resize<Single>(ref Parms.SendParm, 4);
                 //16
                 Parms.SendParm[1] = 1;// general speed
-                Parms.SendParm[2] = 10.0f;// 0.5f;//timeout
+                Parms.SendParm[2] = bmpnum;
+                Parms.SendParm[3] = 10.0f;// 0.5f;//timeout
                 WebComm.CommReply rep1 = new WebComm.CommReply();
 
                 Parms.SendParm[0] = (Single)MyStatic.InspectCmd.CognexFront;
@@ -17423,7 +17673,7 @@ private bool LoadItemData(string file)
                 inv.set(btnCountFront, "Enabled", false);
 
                 WC2.SetControls1(txtClient, this, null, "FrontComm", FrontCamAddr);
-                var task2 = Task.Run(() => FrontCamCount());
+                var task2 = Task.Run(() => FrontCamCount(1));
                 await task2;
                 reply = task2.Result;
                 inv.set(btnCountFront, "Enabled", true);
@@ -17503,6 +17753,11 @@ private bool LoadItemData(string file)
             chkStep.Checked = false;
             ErrorMess = "";
             btnOneCycle.Enabled = false;
+            nDiameterCheckUpDwn = (int)upDwnNdiam.UpDownValue;
+            nFrontCountUpDwn = (int)upDwnCount.UpDownValue;
+            nColorUpDwn = (int)upDwnColor.UpDownValue;
+            DeltaFront = 0;
+            FrontRotate = Single.Parse(txtFrontRotate.Text);
             try
             {
                 DialogResult res = MessageBox.Show("One Cycle?", "", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
@@ -17518,6 +17773,11 @@ private bool LoadItemData(string file)
                 MyStatic.bExitcycle = false;
                 MyStatic.bExitcycleNow = false;
                 MyStatic.bEmpty = false;
+
+                DeltaFront = 0;
+                ErrorFront = 0;
+
+
                 MyStatic.bOneCycle = true;
                 var task = Task.Run(() => Task.Run(() => RunMain()));
                 await task;
@@ -17886,6 +18146,9 @@ private bool LoadItemData(string file)
                 chkStep.Checked = false;
                 ErrorMess = "";
                 btnOneCycle.Enabled = false;
+                nDiameterCheckUpDwn = (int)upDwnNdiam.UpDownValue;
+                nFrontCountUpDwn = (int)upDwnCount.UpDownValue;
+                nColorUpDwn = (int)upDwnColor.UpDownValue;
                 DialogResult res = MessageBox.Show("One Cycle?", "", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
                 if (res != DialogResult.Yes)
                 {
@@ -17907,6 +18170,7 @@ private bool LoadItemData(string file)
                 RobotLoadAct.InAction = false;
                 InspectStationAct.InAction = false;
                 InspectStationAct.VisionInAction = false;
+                InspectStationAct.VisionFrontInAction = false;
                 InspectStationAct.SuaInAction = false;
                 FooterStationAct.AxisInAction = false;
                 //MyStatic.bExitcycleNow = false;
@@ -18185,6 +18449,7 @@ private bool LoadItemData(string file)
                     if ((!InspectStationAct.SuaInAction && !MyStatic.bReset) || TaskSua == null || TaskSua.Status != TaskStatus.Running) { TaskSua = Task.Run(() => CognexMainTask()); }
                     if ((!InspectStationAct.WeldonInAction && !MyStatic.bReset) || TaskWeldon == null || TaskWeldon.Status != TaskStatus.Running) { TaskWeldon = Task.Run(() => WeldonMainTask()); }
                     if (!MyStatic.bReset && (TaskRefresh == null || (TaskRefresh.Status != TaskStatus.Running))) TaskRefresh = Task.Run(() => RefreshLables());
+                    if ((!InspectStationAct.VisionFrontInAction && !MyStatic.bReset) || TaskVisionFront == null || TaskVisionFront.Status != TaskStatus.Running) { TaskVisionFront = Task.Run(() => VisionFrontMainTask()); }
 
                     if (MyStatic.bReset)
                     {
@@ -18224,20 +18489,6 @@ private bool LoadItemData(string file)
                 SetTraficLights(0, 1, 0, 0);//(int green = 0, int yellow = 0, int red = 0, int buzzer = 0
                 return false;
 
-
-
-                //
-
-                if (MyStatic.bExitcycleNow)
-                {
-                    MessageBox.Show("EXIT CYCLE WITH ERROR " + "\r\n" + ErrorMess);
-                    //btnOneCycle.Enabled = true;
-                    return false;
-                }
-                Thread.Sleep(1000);
-                btnOneCycle.Enabled = true;
-                return false;
-                //}
             }
             catch (Exception err)
             {
@@ -19044,6 +19295,220 @@ private bool LoadItemData(string file)
                 }
             }
 
+        }
+
+        private async void btnPutInspect_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                DialogResult res1 = MessageBox.Show("PUT PART WITH ROBOT INTO FOOTER ?", "Warning", MessageBoxButtons.YesNo,
+                               MessageBoxIcon.Warning);
+                if (res1 != DialogResult.Yes)
+                {
+                    return;
+                }
+                    MyStatic.bStartcycle = false;
+                ControlsEnable(false);
+                MyStatic.bReset = false;
+                //footer home
+                if (FooterStationAct.AxisInAction) return;
+                FooterStationAct.AxisInAction = true;
+                btnFooterHome.Enabled = false;
+                btnFooterHome1.Enabled = false;
+               
+                int axis = 0;
+                Single speed5 = (int.Parse(txtSpeedSt.Text) * axis_Parameters[4].Ax_Vmax) / 100.0f;
+                Single speed4 = (int.Parse(txtSpeedSt.Text) * axis_Parameters[3].Ax_Vmax) / 100.0f;
+                var task12 = Task.Run(() => MoveFooterHome(speed5, speed4));
+                await task12.ConfigureAwait(true);
+                if (!task12.Result.result)
+                {
+                   
+                    MessageBox.Show("FOOTER HOME ERROR!", "ERROR", MessageBoxButtons.OK,
+                                    MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                    FooterStationAct.AxisInAction = false;
+                    FooterStationAct.State = (int)MyStatic.E_State.InError;
+                    return;
+                }
+                Thread.Sleep(200);
+                //SetTraficLights(0, 1, 0, 0);//yellow/green
+                btnFooterHome.Enabled = true;
+                btnFooterHome1.Enabled = true;
+                FooterStationAct.AxisInAction = false;
+                FooterStationAct.State = (int)MyStatic.E_State.InHome;
+                //end footer home
+                inv.settxt(txtSpeed, Math.Abs(trackSpeed.Value).ToString());
+                FanucSpeed = trackSpeed.Value;
+                int robot = 0;
+                int id = 0;//base position
+                chkStep.Checked = false;
+                
+
+
+                basepos = new position();
+                baseOrg = new position();
+                //pick tray
+
+                        robot = MyStatic.RobotLoad;
+                        id = RobotLoadPoints.PickTrayOrg.id;
+                        RobotFunctions.CommReply fini = new RobotFunctions.CommReply();
+                        RobotLoadPoints.PickTray = RobotLoadPoints.PickTrayOrg;
+                        int partid = TrayPartId;
+                        var task1 = Task.Run(() => GetPickTray(partid, false));
+                        await task1;
+                        RobotFunctions.CommReply commreply = task1.Result;
+                        if (commreply.result && commreply.data.Length >= 4)
+                        {
+                            baseOrg = RobotLoadPoints.PickTrayOrg;//with pallet without corrections
+                            baseOrg.x = commreply.data[0];
+                            baseOrg.y = commreply.data[1];
+                            baseOrg.z = commreply.data[2];
+                            baseOrg.r = commreply.data[3];
+                            basepos.x = baseOrg.x + (Single)UpDwnX3.UpDownValue;
+                            basepos.y = baseOrg.y + (Single)UpDwnY3.UpDownValue;
+                            basepos.z = baseOrg.z + (Single)UpDwnZ3.UpDownValue;
+                            basepos.r = baseOrg.r + (Single)UpDwnR3.UpDownValue;
+                        }
+                        else
+                        {
+                            MyStatic.bExitcycle = true;
+                            SetTraficLights(0, 0, 1, 0);//(int green = 0, int yellow = 0, int red = 0, int buzzer = 0
+                            MessageBox.Show("ROBOT GET POSITION ERROR!", "ERROR", MessageBoxButtons.OK,
+                                            MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                            MyStatic.bReset = true;
+                            RobotLoadAct.InAction = false;
+                            return;
+                        }
+                        var task = Task.Run(() => PickFromTray(basepos));
+                        await task;
+                        fini = task.Result;
+
+                        if (fini.result)
+                        {
+                            //ControlsEnable(true);
+                            RobotLoadAct.OnGrip1_PartID = 1;
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("=>Fini Pick Tray" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                            dFile.WriteLogFile("Pick Tray");
+                            RobotLoadAct.InAction = false;
+                            
+                        }
+                        else
+                        {
+                            MyStatic.bExitcycle = true;
+                            SetTraficLights(0, 0, 1, 0);//(int green = 0, int yellow = 0, int red = 0, int buzzer = 0
+                            MessageBox.Show("ROBOT PICK FROM TRAY ERROR!", "ERROR", MessageBoxButtons.OK,
+                                            MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                            MyStatic.bReset = true;
+                            RobotLoadAct.InAction = false;
+                            return;
+                        }
+                        
+                   //Place Inspection
+                        robot = MyStatic.RobotLoad;
+                        id = RobotLoadPoints.PlaceInspect.id;
+                        fini = new RobotFunctions.CommReply();
+                        baseOrg = RobotLoadPoints.PlaceInspect;//with pallet without corrections
+                        basepos.x = RobotLoadPoints.PlaceInspect.x + (Single)UpDwnX4.UpDownValue;
+                        basepos.y = RobotLoadPoints.PlaceInspect.y + (Single)UpDwnY4.UpDownValue;
+                        basepos.z = RobotLoadPoints.PlaceInspect.z + (Single)UpDwnZ4.UpDownValue;
+                        basepos.r = RobotLoadPoints.PlaceInspect.r + (Single)UpDwnR4.UpDownValue;
+                        var task10 = Task.Run(() => PlacePartInsp(basepos));
+                        await task10;
+                        fini = task10.Result;
+
+                        if (fini.result)
+                        {
+                            //ControlsEnable(true);
+                            RobotLoadAct.OnGrip1_PartID = -1;
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("=>Fini Place Inspection" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                            dFile.WriteLogFile("Place Inspection");
+                            RobotLoadAct.InAction = false;
+                            //teaching pos
+
+                           
+                            
+                        }
+                        else
+                        {
+                            MyStatic.bExitcycle = true;
+                            SetTraficLights(0, 0, 1, 0);//(int green = 0, int yellow = 0, int red = 0, int buzzer = 0
+                            MessageBox.Show("ROBOT PLace Inspection ERROR!", "ERROR", MessageBoxButtons.OK,
+                                            MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                            MyStatic.bReset = true;
+                            RobotLoadAct.InAction = false;
+                            return;
+                        }
+                //footer to work
+                var task13 = Task.Run(() => RobotHome());
+                await task13;
+
+                bool rep1 = task13.Result;
+
+                if (!rep1)
+
+                {
+                    SetTraficLights(0, 0, 1, 0);//(int green = 0, int yellow = 0, int red = 0, int buzzer = 0
+                    MessageBox.Show("ROBOT1 HOME ERROR!", "ERROR", MessageBoxButtons.OK,
+                                    MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                    return;
+                }
+                //footer to work
+                if (FooterStationAct.AxisInAction) return;
+                FooterStationAct.AxisInAction = true;
+                btnFooterWork.Enabled = false;
+                btnFooterWork1.Enabled = false;
+                //SetTraficLights(0, 0, 0, 0);//
+                
+                if (Single.Parse(txtPartLength.Text) <= 0 || master.Length <= 0)
+                {
+                    MessageBox.Show("ERROR PART LENGTH!", "ERROR", MessageBoxButtons.OK,
+                                    MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                    btnFooterWork.Enabled = false;
+                    FooterStationAct.AxisInAction = true;
+                    return;
+                }
+                if (txtPartDiam.Text.Trim() == "" || txtPartDiam.Text.Trim() == "0") inv.settxt(txtPartDiam, master.Diameter.ToString());
+                if (txtPartLength.Text.Trim() == "" || txtPartLength.Text.Trim() == "0") inv.settxt(txtPartLength, master.Length.ToString());
+                Single Pos5 = master.Ax5_Work + upDwnFootWorkTopX.UpDownValue + (Single.Parse(txtPartLength.Text) - master.Length);
+                Single Pos1 = master.Ax1_Work + upDwnCam2z.UpDownValue;// - (Single.Parse(txtPartDiam.Text) - master.Diameter) / 2.0f;
+                Single Pos2 = master.Ax2_Work;// + upDwnLamp1Z.UpDownValue;// - (Single.Parse(txtPartDiam.Text) - master.Diameter) / 2.0f;
+                Single Pos4 = master.Ax4_Work + upDwnFootWorkR.UpDownValue;
+                Single Pos3 = master.Ax3_Front + upDwnCam1x.UpDownValue; //master.Ax3_Work;
+                //lamp1
+                BitArray lamp = new BitArray(new bool[8]);
+                lamp[0] = true; //lamp1
+                byte[] Lamps = new byte[1];
+                lamp.CopyTo(Lamps, 0);
+
+
+                Single speed = (int.Parse(txtSpeedSt.Text) * axis_Parameters[4].Ax_Vmax) / 100.0f;
+                Single speed1 = (int.Parse(txtSpeedSt.Text) / 100.0f);
+                var task11 = Task.Run(() => MoveFooterWork(Pos5, speed, Pos1, Pos2, Pos4, speed1, Pos3, Lamps[0]));
+                await task11;
+                if (!task11.Result.result)
+                {
+                   
+                    MessageBox.Show("FOOTER WORK ERROR!", "ERROR", MessageBoxButtons.OK,
+                                    MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                    btnFooterWork.Enabled = true;
+                    FooterStationAct.AxisInAction = false;
+                    FooterStationAct.State = (int)MyStatic.E_State.InError;
+                    return;
+
+                }
+                Thread.Sleep(200);
+                
+                btnFooterWork.Enabled = true;
+                btnFooterWork1.Enabled = true;
+                FooterStationAct.AxisInAction = false;
+                FooterStationAct.State = (int)MyStatic.E_State.InWork;
+                ControlsEnable(true);
+
+
+
+
+            }
+            catch(Exception ex) { }
         }
     }
 }

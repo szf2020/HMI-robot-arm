@@ -421,6 +421,7 @@ namespace EndmillHMI
             public bool InAction;
             public int OnFooterGrip3_PartID;
             public bool VisionInAction;
+            public bool VisionFrontInAction;
             public int[] State;
             public int SuaState;
             public bool SuaInAction;

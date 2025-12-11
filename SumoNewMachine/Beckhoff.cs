@@ -109,6 +109,7 @@ namespace EndmillHMI
                     {
 
                         //WriteToFile(Path.GetDirectoryName(Application.ExecutablePath) + "\\AutomationIni\\Log\\Beckhofflog " + DateTime.Now.ToString("yyyy-MM-dd HH") + ".ini", txt.Text);
+                        WriteToFile(Path.GetDirectoryName(System.Windows.Forms.Application.ExecutablePath) + "\\AutomationIni\\Log\\Beckhofflog " + DateTime.Now.ToString("yyyy-MM-dd HH") + ".ini", txt.Text);
                         txt.Text = "";
                         //text1 = text;
                     }
