@@ -159,8 +159,9 @@ namespace EndmillHMI
                 SetTexttxt("<--" + Data + " // (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", txtsend, frm);
                 req = System.Net.WebRequest.Create(Url + "?" + Data);
                 req.Proxy = null;
-                
-                
+                req.Timeout = timeout;
+
+
 
                 System.Net.WebResponse resp =  req.GetResponse();
                 System.IO.Stream stream = resp.GetResponseStream();
@@ -262,7 +263,7 @@ namespace EndmillHMI
                     }
                     val = "cmd" + val + "end";
                    
-                    reply = WriteFanucRegAsync(reg, num, val, 1000);
+                    reply = WriteFanucRegAsync(reg, num, val, (int)Parms.timeout*1000);
                 //var task = WriteHttpAsync(reg, num, val, 1000);
                    
                     //if(reply.comment.StartsWith("cmd"))

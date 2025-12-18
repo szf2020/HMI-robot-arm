@@ -1559,8 +1559,10 @@ namespace EndmillHMI
                     {
                         Task.Run(() => frmMain.newFrmMain.ListAdd3("Beckhoff=> NO PART IN FOOTER" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
                         ErrorMess = "NO PART IN FOOTER " + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")";
-                        InspectStationAct.Reject[(int)Reject.Beckhoff] = true;
+                        ClearStations();
+                        //InspectStationAct.Reject[(int)Reject.Beckhoff] = true;
                         MyStatic.bExitcycleNow = true;
+                        InspectStationAct.VisionInAction = false;
                         return;
                     }
                     FooterStationAct.AxisInAction = false;
@@ -2071,60 +2073,103 @@ namespace EndmillHMI
                     var task10 = Task.Run(() => FrontCamOnOff(1));
                     await task10;
                     WebComm.CommReply reply10 = task10.Result;
+                    if (!reply10.result)
+                    {
+                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Error Front camera ON" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                        InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                        InspectStationAct.Reject[(int)Reject.VisionFront] = true;
+
+                        InspectStationAct.VisionInAction = false;
+                        MyStatic.bExitcycleNow = true;
+                        return;
+                    }
                     Thread.Sleep(300);
                     Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front<= Run Front1 " + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
 
                     //-----------first time---------------------
-                    DeltaFront = 0;
-                    var task1 = Task.Run(() => StartCycleInspectFront(DeltaFront, 1));
-                    await task1;
-                    WebComm.CommReply reply = task1.Result;
-
-                    if (reply.result)
+                    //-----count front---------------
+                    if (chkFront.Checked)
                     {
-                        inv.settxt(lblInspect, "Vision Front Fini");
-                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front1 Snap Fini" + "delta=" + DeltaFront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                        if (reply.comment != null && reply.comment.StartsWith("cmd"))
+                        DeltaFront = 0;
+                        var task1 = Task.Run(() => StartCycleInspectFront(DeltaFront, 1));
+                        await task1;
+                        WebComm.CommReply reply = task1.Result;
+
+                        if (reply.result)
                         {
-                            string s = reply.comment.Remove(0, 3);
-                            string[] ss = s.Split(',');
-                            if (ss.Length >= 4 && ss[0] == ((int)MyStatic.InspectCmd.FrontCamCount).ToString() && ss[1] == "1")
+                            inv.settxt(lblInspect, "Vision Front Fini");
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front1 Snap Fini" + "delta=" + DeltaFront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                            if (reply.comment != null && reply.comment.StartsWith("cmd"))
                             {
-                                inv.settxt(lblInspect, "Vision Front1 Ready");
-                                nfrontCount = int.Parse(ss[2]);
-                                //InspectStationAct.VisionFrontInAction = false;
-                                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front1 Vision Count=" + nfrontCount.ToString()+" delta="+ DeltaFront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                                partData[InspectStationAct.OnFooterGrip3_PartID].Count = nfrontCount;
-                                if (nfrontCount == nFrontCountUpDwn)
+                                string s = reply.comment.Remove(0, 3);
+                                string[] ss = s.Split(',');
+                                if (ss.Length >= 4 && ss[0] == ((int)MyStatic.InspectCmd.FrontCamCount).ToString() && ss[1] == "1")
                                 {
-                                    //InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
-                                    //InspectStationAct.Reject[(int)Reject.VisionCount] = false;
+                                    inv.settxt(lblInspect, "Vision Front1 Ready");
+                                    nfrontCount = int.Parse(ss[2]);
                                     //InspectStationAct.VisionFrontInAction = false;
-                                    DeltaFront = 0;
-                                    ErrorFront = 0;
-                                    countOK = true;
-                                    //return;
+                                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front1 Vision Count=" + nfrontCount.ToString() + " delta=" + DeltaFront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                                    partData[InspectStationAct.OnFooterGrip3_PartID].Count = nfrontCount;
+                                    if (nfrontCount == nFrontCountUpDwn)
+                                    {
+                                        
+                                        DeltaFront = 0;
+                                        ErrorFront = 0;
+                                        countOK = true;
+                                        //return;
+                                    }
+
+
+
+
                                 }
-                                
-
+                                else
+                                {
+                                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front1 Vision Error1" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                                    InspectStationAct.Reject[(int)InspectSt.VisionFront] = true;
+                                }
 
 
                             }
-                            else
-                            {
-                                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front1 Vision Error1"   + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                                InspectStationAct.Reject[(int)InspectSt.VisionFront] = true;
-                            }
-                            
-                           
+
+
                         }
-                       
-
+                        else
+                        {
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front1 Vision Error2" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                            InspectStationAct.Reject[(int)InspectSt.VisionFront] = true;
+                        }
                     }
-                    else
+                    //------first time snap front
+                    else if (chkInspectFront.Checked)
                     {
-                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front1 Vision Error2" +   "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
-                        InspectStationAct.Reject[(int)InspectSt.VisionFront] = true;
+                        DeltaFront = 0;
+                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front<= Run Front1 snap" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                        var task30 = Task.Run(() => StartSnapFront(DeltaFront));
+                        await task30;
+                        WebComm.CommReply reply2 = task30.Result;
+
+                        if (reply2.result)
+                        {
+                            inv.settxt(lblInspect, "Vision Front1 Fini");
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front1 Snap Fini" + "delta=" + DeltaFront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+
+                            DeltaFront = 0;
+                            ErrorFront = 0;
+                            countOK = true;
+                            //return;
+
+                        }
+                        else
+                        {
+                            inv.settxt(lblInspect, "Vision Front Snap1 Reject");
+                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision Front=> Front1 snap Error Reject" + "delta=" + DeltaFront.ToString() + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                                                       
+                            InspectStationAct.Reject[(int)InspectSt.VisionFront] = true;
+                            countOK = true;
+                           
+
+                        }
                     }
                     
                     //-------------------------second time-----------------------
@@ -2182,6 +2227,16 @@ namespace EndmillHMI
                                         var task30 = Task.Run(() => FrontCamOnOff(0));
                                         await task30;
                                         WebComm.CommReply reply30 = task10.Result;
+                                        if (!reply30.result)
+                                        {
+                                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Error Front camera OFF" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                                            InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                                            InspectStationAct.Reject[(int)Reject.VisionFront] = true;
+
+                                            InspectStationAct.VisionInAction = false;
+                                            MyStatic.bExitcycleNow = true;
+                                            return;
+                                        }
                                         return;
                                     }
                                     else
@@ -2196,7 +2251,17 @@ namespace EndmillHMI
                                         //front camera off
                                         var task40 = Task.Run(() => FrontCamOnOff(0));
                                         await task40;
-                                        WebComm.CommReply reply40 = task10.Result;
+                                        WebComm.CommReply reply40 = task40.Result;
+                                        if (!reply40.result)
+                                        {
+                                            Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Error Front camera OFF" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                                            InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                                            InspectStationAct.Reject[(int)Reject.VisionFront] = true;
+
+                                            InspectStationAct.VisionInAction = false;
+                                            MyStatic.bExitcycleNow = true;
+                                            return;
+                                        }
                                         return;
 
                                     }
@@ -2219,7 +2284,17 @@ namespace EndmillHMI
                                     //front camera off
                                     var task50 = Task.Run(() => FrontCamOnOff(0));
                                     await task50;
-                                    WebComm.CommReply reply50 = task10.Result;
+                                    WebComm.CommReply reply50 = task50.Result;
+                                    if (!reply50.result)
+                                    {
+                                        Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Error Front camera OFF" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                                        InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                                        InspectStationAct.Reject[(int)Reject.VisionFront] = true;
+
+                                        InspectStationAct.VisionInAction = false;
+                                        MyStatic.bExitcycleNow = true;
+                                        return;
+                                    }
                                     return;
 
 
@@ -2242,7 +2317,17 @@ namespace EndmillHMI
                                 //front camera off
                                 var task60 = Task.Run(() => FrontCamOnOff(0));
                                 await task60;
-                                WebComm.CommReply reply60 = task10.Result;
+                                WebComm.CommReply reply60 = task60.Result;
+                                if (!reply60.result)
+                                {
+                                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Error Front camera OFF" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                                    InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                                    InspectStationAct.Reject[(int)Reject.VisionFront] = true;
+
+                                    InspectStationAct.VisionInAction = false;
+                                    MyStatic.bExitcycleNow = true;
+                                    return;
+                                }
                                 return;
 
                             }
@@ -2263,7 +2348,17 @@ namespace EndmillHMI
                             //front camera off
                             var task70 = Task.Run(() => FrontCamOnOff(0));
                             await task70;
-                            WebComm.CommReply reply70 = task10.Result;
+                            WebComm.CommReply reply70 = task70.Result;
+                            if (!reply70.result)
+                            {
+                                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Error Front camera OFF" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                                InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                                InspectStationAct.Reject[(int)Reject.VisionFront] = true;
+
+                                InspectStationAct.VisionInAction = false;
+                                MyStatic.bExitcycleNow = true;
+                                return;
+                            }
                             return;
 
                         }
@@ -2289,7 +2384,17 @@ namespace EndmillHMI
                                 //front camera off
                                 var task20 = Task.Run(() => FrontCamOnOff(0));
                                 await task20;
-                                WebComm.CommReply reply20 = task10.Result;
+                                WebComm.CommReply reply20 = task20.Result;
+                                if (!reply20.result)
+                                {
+                                    Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Error Front camera OFF" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                                    InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                                    InspectStationAct.Reject[(int)Reject.VisionFront] = true;
+
+                                    InspectStationAct.VisionInAction = false;
+                                    MyStatic.bExitcycleNow = true;
+                                    return;
+                                }
                                 return;
                             
                         }
@@ -2308,7 +2413,17 @@ namespace EndmillHMI
                             //front camera off
                             var task70 = Task.Run(() => FrontCamOnOff(0));
                             await task70;
-                            WebComm.CommReply reply70 = task10.Result;
+                            WebComm.CommReply reply70 = task70.Result;
+                            if (!reply70.result)
+                            {
+                                Task.Run(() => frmMain.newFrmMain.ListAdd3("Vision=> Error Front camera OFF" + "// (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", frmMain.newFrmMain.txtAutoLog, false));
+                                InspectStationAct.State[(int)InspectSt.VisionFront] = (int)MyStatic.E_State.FrontSnapFini;
+                                InspectStationAct.Reject[(int)Reject.VisionFront] = true;
+
+                                InspectStationAct.VisionInAction = false;
+                                MyStatic.bExitcycleNow = true;
+                                return;
+                            }
                             return;
 
                         }
@@ -2635,11 +2750,11 @@ namespace EndmillHMI
                 Parms.DebugTime = 1000;
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.StartCognex;
                 Parms.comment = "start Cognex";
-                Parms.timeout = 5;
+                Parms.timeout = 40;
                 Array.Resize<Single>(ref Parms.SendParm, 3);
                 //16
                 Parms.SendParm[1] = 1;// general speed
-                Parms.SendParm[2] = 5.0f;// 0.5f;//timeout
+                Parms.SendParm[2] = 40.0f;// 0.5f;//timeout
 
                 Parms.SendParm[0] = (Single)MyStatic.InspectCmd.StartCognex;
                 reply = WC3.RunCmd(Parms);
@@ -4575,11 +4690,11 @@ namespace EndmillHMI
                 Parms.DebugTime = 1000;
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.CheckComm;
                 Parms.comment = "Check comm";
-                Parms.timeout = 1;
+                Parms.timeout = 3;
                 Array.Resize<Single>(ref Parms.SendParm, 3);
                 //16
                 Parms.SendParm[1] = 1;// general speed
-                Parms.SendParm[2] = 1.0f;// 0.5f;//timeout
+                Parms.SendParm[2] = 3.0f;// 0.5f;//timeout
                 WebComm.CommReply rep1 = new WebComm.CommReply();
                 WebComm.CommReply rep2 = new WebComm.CommReply();
                 if (comm == 1)
@@ -4652,7 +4767,7 @@ namespace EndmillHMI
                 Parms.DebugTime = 1000;
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.DataToVision;
                 Parms.comment = "data to vision";
-                Parms.timeout = 2;
+                Parms.timeout = 3;
                 //NPNPP
                 //Array.Resize<Single>(ref Parms.SendParm, 8);
                 Array.Resize<Single>(ref Parms.SendParm, 9);
@@ -4664,7 +4779,7 @@ namespace EndmillHMI
                 Parms.SendParm[5] = Single.Parse(txtPartLengthU.Text);
                 Parms.SendParm[6] = Inspected_PartID + 1;
                 Parms.SendParm[7] = (chkColor.Checked ? 100f : 0f);
-                Parms.SendParm[8] = 2.0f;// 0.5f;//timeout
+                Parms.SendParm[8] = 3.0f;// 0.5f;//timeout
                 WebComm.CommReply rep1 = new WebComm.CommReply();
                 WC1.SetControls1(txtClient, this, null, "VisionComm", CameraAddr);
 
@@ -4710,11 +4825,11 @@ namespace EndmillHMI
                 Parms.DebugTime = 1000;
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.DataVisionSave;
                 Parms.comment = "data vision save";
-                Parms.timeout = 2;
+                Parms.timeout = 3;
                 Array.Resize<Single>(ref Parms.SendParm, 8);
                 //16
                 
-                Parms.SendParm[7] = 2.0f;// 0.5f;//timeout
+                Parms.SendParm[7] = 3.0f;// 0.5f;//timeout
                 WC1.SetControls1(txtClient, this, null, "VisionComm", CameraAddr);
                 WebComm.CommReply rep1 = new WebComm.CommReply();
 
@@ -4865,7 +4980,7 @@ namespace EndmillHMI
 
                 Parms.FunctionCode = cmd;
                 Parms.comment = "Start Cycle Vision";
-                Parms.timeout = 2;
+                Parms.timeout = 20;
                 Array.Resize<Single>(ref Parms.SendParm, 3);
                 Parms.SendParm[0] = cmd;
                 Parms.SendParm[1] = 1;// general speed
@@ -4912,7 +5027,7 @@ namespace EndmillHMI
                 Parms.DebugTime = 1000;
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.StartWaitSua;
                 Parms.comment = "Start Cycle Cognex";
-                Parms.timeout = 50;
+                Parms.timeout = 40;
                 Array.Resize<Single>(ref Parms.SendParm, 3);
                 Parms.SendParm[0] = (Single)MyStatic.InspectCmd.StartWaitSua;
                 Parms.SendParm[1] = 1;// general speed
@@ -4972,7 +5087,7 @@ namespace EndmillHMI
                 Parms.DebugTime = 1000;
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.StopCycle;
                 Parms.comment = "Stop Cycle Vision";
-                Parms.timeout = 2;
+                Parms.timeout = 20;
                 Array.Resize<Single>(ref Parms.SendParm, 3);
                 Parms.SendParm[0] = (Single)MyStatic.InspectCmd.StopCycle;
                 Parms.SendParm[1] = 1;// general speed
@@ -11795,7 +11910,7 @@ private bool LoadItemData(string file)
                 nFrontCountUpDwn = (int)upDwnCount.UpDownValue;
                 nColorUpDwn = (int)upDwnColor.UpDownValue;
                 FrontRotate = Single.Parse(txtFrontRotate.Text);
-                if (!chkFront.Checked) chkInspectFront.Checked = false;
+                //if (!chkFront.Checked) chkInspectFront.Checked = false;
                 LoadTray(cmbTray.Text);
                 SaveItem();
                 //send data to vision
@@ -11909,20 +12024,28 @@ private bool LoadItemData(string file)
                 RobotLoadAct.OnGrip1_State = (int)MyStatic.E_State.Empty;
                 if (InspectStationAct.State != null) for (int i = 0; i < InspectStationAct.State.Length; i++) InspectStationAct.State[i] = (int)MyStatic.E_State.Empty;
                 if (InspectStationAct.State != null) for (int i = 0; i < InspectStationAct.State.Length; i++) InspectStationAct.Reject[i] = false;
-                txtGrip1num.Text = "";
-                txtGrip2num.Text = "";
-                txtGrip3num.Text = "";
+                inv.settxt(txtGrip1num, "");
+                inv.settxt(txtGrip2num, "");
+                inv.settxt(txtGrip3num, "");
                 RobotLoadAct.OnGrip1_PartID = -1;
                 RobotLoadAct.OnGrip2_PartID = -1;
                 InspectStationAct.OnFooterGrip3_PartID = -1;
                 Inspected_PartID = 0;
                 if (InspectStationAct.Reject != null) for (int i = 0; i < InspectStationAct.Reject.Length; i++) InspectStationAct.Reject[i] = false;
                 if (InspectStationAct.State != null) for (int i = 0; i < InspectStationAct.State.Length; i++) InspectStationAct.State[i] = 0;
-                if (InspectStationAct.Reject != null && partData != null) for (int i = 0; i < InspectStationAct.Reject.Length; i++) partData[RobotLoadAct.OnGrip1_PartID].Reject[i] = false;
-                if (InspectStationAct.Reject != null && partData != null) for (int i = 0; i < InspectStationAct.Reject.Length; i++) partData[RobotLoadAct.OnGrip2_PartID].Reject[i] = false;
-                if (partData != null) partData[RobotLoadAct.OnGrip2_PartID].Position = (int)MyStatic.E_State.OnGrip1;
+                if (InspectStationAct.Reject != null && partData != null && RobotLoadAct.OnGrip1_PartID >= 0) for (int i = 0; i < InspectStationAct.Reject.Length; i++) partData[RobotLoadAct.OnGrip1_PartID].Reject[i] = false;
+                if (InspectStationAct.Reject != null && partData != null && RobotLoadAct.OnGrip1_PartID >= 0) for (int i = 0; i < InspectStationAct.Reject.Length; i++) partData[RobotLoadAct.OnGrip2_PartID].Reject[i] = false;
+                if (partData != null && RobotLoadAct.OnGrip2_PartID >= 0) partData[RobotLoadAct.OnGrip2_PartID].Position = (int)MyStatic.E_State.OnGrip1;
                 InspectStationAct.WeldonState = 0;
                 InspectStationAct.SuaState = 0;
+                RobotLoadAct.InAction = false;
+                InspectStationAct.InAction = false;
+                InspectStationAct.VisionInAction = false;
+                InspectStationAct.VisionFrontInAction = false;
+                InspectStationAct.SuaInAction = false;
+                FooterStationAct.AxisInAction = false;
+                InspectStationAct.WeldonInAction = false;
+                
                 DeltaFront = 0;
                 ErrorFront = 0;
 
@@ -13980,7 +14103,7 @@ private bool LoadItemData(string file)
                 Parms.DebugTime = 1000;
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.CheckWeldone;
                 Parms.comment = "Start Cycle Weldon";
-                Parms.timeout = 2;
+                Parms.timeout = 20;
                 Array.Resize<Single>(ref Parms.SendParm, 3);
                 Parms.SendParm[0] = (Single)MyStatic.InspectCmd.CheckWeldone;
                 Parms.SendParm[1] = 1;// general speed
@@ -14208,7 +14331,7 @@ private bool LoadItemData(string file)
                     Parms.DebugTime = 1000;
                     Parms.FunctionCode = (int)MyStatic.InspectCmd.CheckDiam;
                     Parms.comment = "Start Cycle Diameter";
-                    Parms.timeout = 2;
+                    Parms.timeout = 20;
                     Array.Resize<Single>(ref Parms.SendParm, 3);
                     Parms.SendParm[0] = (Single)MyStatic.InspectCmd.CheckDiam;
                     Parms.SendParm[1] = 1;// general speed
@@ -17477,9 +17600,9 @@ private bool LoadItemData(string file)
                 Parms.SendParm[0] = (Single)MyStatic.InspectCmd.FrontCamSnap;
                 rep1 = WC2.RunCmd(Parms);
 
-                if (!rep1.result) 
-                    MessageBox.Show("FRONT CAMERA SNAP ERROR!", "ERROR", MessageBoxButtons.OK,
-                               MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                //if (!rep1.result) 
+                //    MessageBox.Show("FRONT CAMERA SNAP ERROR!", "ERROR", MessageBoxButtons.OK,
+                //               MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
 
 
                 if (rep1.result) reply.result = true;
@@ -17519,8 +17642,8 @@ private bool LoadItemData(string file)
                 Parms.SendParm[0] = (Single)MyStatic.InspectCmd.FrontCamCount;
                 rep1 = WC2.RunCmd(Parms);
 
-                if (!rep1.result) MessageBox.Show("FRONT CAMERA COUNT ERROR!", "ERROR", MessageBoxButtons.OK,
-                               MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                //if (!rep1.result) MessageBox.Show("FRONT CAMERA COUNT ERROR1!", "ERROR", MessageBoxButtons.OK,
+                //               MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
 
 
                 if (rep1.result) reply.result = true;
@@ -17533,12 +17656,12 @@ private bool LoadItemData(string file)
             {
                 reply.result = false;
 
-                MessageBox.Show("CAMERA COUNT ERROR:" + err.Message);
+                MessageBox.Show("FRONT CAMERA COUNT ERROR2:" + err.Message);
                 return reply;
             }
         }
         
-        private WebComm.CommReply FrontCamOnOff(int On)
+        private async Task<WebComm.CommReply> FrontCamOnOff(int On)
         {
 
             WebComm.CommReply reply = new WebComm.CommReply();
@@ -17551,7 +17674,7 @@ private bool LoadItemData(string file)
                 Parms.DebugTime = 1000;
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.FrontCamOnOff;
                 Parms.comment = "FrontCamOnOff";
-                Parms.timeout = 5;
+                Parms.timeout = 10;
                 Array.Resize<Single>(ref Parms.SendParm, 3);
                 //16
                 Parms.SendParm[1] = On;// on/off camera
@@ -17559,10 +17682,20 @@ private bool LoadItemData(string file)
                 WebComm.CommReply rep1 = new WebComm.CommReply();
 
                 Parms.SendParm[0] = (Single)MyStatic.InspectCmd.FrontCamOnOff;
-                rep1 = WC2.RunCmd(Parms);
+                //rep1 = WC2.RunCmd(Parms);
+                var task1 = Task.Run(() => WC2.RunCmd(Parms));
+                await task1;
+                rep1 = task1.Result;
+                if (!rep1.result)
+                {
+                    //MessageBox.Show("FRONT CAMERA ON/OFF ERROR!", "ERROR", MessageBoxButtons.OK,
+                    //           MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
 
-                if (!rep1.result) MessageBox.Show("FRONT CAMERA ON/OFF ERROR!", "ERROR", MessageBoxButtons.OK,
-                               MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                    Thread.Sleep(500);
+                    var task2 = Task.Run(() => WC2.RunCmd(Parms));
+                    await task2;
+                    rep1 = task2.Result;
+                }
 
 
                 if (rep1.result) reply.result = true;
@@ -17591,19 +17724,19 @@ private bool LoadItemData(string file)
                 Parms.DebugTime = 1000;
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.CognexFront;
                 Parms.comment = "Inspect Front";
-                Parms.timeout = 5;
+                Parms.timeout = 20;
                 Array.Resize<Single>(ref Parms.SendParm, 4);
                 //16
                 Parms.SendParm[1] = 1;// general speed
                 Parms.SendParm[2] = bmpnum;
-                Parms.SendParm[3] = 10.0f;// 0.5f;//timeout
+                Parms.SendParm[3] = 20.0f;// 0.5f;//timeout
                 WebComm.CommReply rep1 = new WebComm.CommReply();
 
                 Parms.SendParm[0] = (Single)MyStatic.InspectCmd.CognexFront;
                 rep1 = WC3.RunCmd(Parms);
 
-                if (!rep1.result) MessageBox.Show("FRONT INSPECT ERROR!", "ERROR", MessageBoxButtons.OK,
-                               MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                //if (!rep1.result) MessageBox.Show("FRONT INSPECT ERROR!", "ERROR", MessageBoxButtons.OK,
+                //               MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
 
 
                 if (rep1.result) reply.result = true;
@@ -17633,7 +17766,7 @@ private bool LoadItemData(string file)
                 Parms.DebugTime = 1000;
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.CheckColor;
                 Parms.comment = "Check Color";
-                Parms.timeout = 5;
+                Parms.timeout = 10;
                 Array.Resize<Single>(ref Parms.SendParm, 3);
                 //16
                 Parms.SendParm[1] = upDwnColor.UpDownValue;// general speed
@@ -17861,6 +17994,7 @@ private bool LoadItemData(string file)
                     MessageBox.Show("ERROR NO PART IN FOOTER! Exit cycle", "ERROR", MessageBoxButtons.OK,
                               MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
                     InspectStationAct.VisionInAction = false;
+                    ClearStations();
                     MyStatic.bExitcycleNow = true;
                     btnCognexTop.Enabled = true;
                     return;
@@ -18512,11 +18646,11 @@ private bool LoadItemData(string file)
                 Parms.DebugTime = 1000;
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.CheckComm;
                 Parms.comment = "Port";
-                Parms.timeout = 1;
+                Parms.timeout = 5;
                 Array.Resize<Single>(ref Parms.SendParm, 3);
                 //16
                 Parms.SendParm[1] = 1;//enable
-                Parms.SendParm[2] = 1.0f;// 0.5f;//timeout
+                Parms.SendParm[2] = 5.0f;// 0.5f;//timeout
                 WebComm.CommReply rep1 = new WebComm.CommReply();
               
                     Parms.SendParm[0] = (Single)MyStatic.InspectCmd.EnableComm;
@@ -18553,11 +18687,11 @@ private bool LoadItemData(string file)
                 Parms.DebugTime = 1000;
                 Parms.FunctionCode = (int)MyStatic.InspectCmd.CheckComm;
                 Parms.comment = "Port";
-                Parms.timeout = 1;
+                Parms.timeout = 5;
                 Array.Resize<Single>(ref Parms.SendParm, 3);
                 //16
                 Parms.SendParm[1] = 0;//disable
-                Parms.SendParm[2] = 1.0f;// 0.5f;//timeout
+                Parms.SendParm[2] = 5.0f;// 0.5f;//timeout
                 WebComm.CommReply rep1 = new WebComm.CommReply();
 
                 Parms.SendParm[0] = (Single)MyStatic.InspectCmd.EnableComm;
