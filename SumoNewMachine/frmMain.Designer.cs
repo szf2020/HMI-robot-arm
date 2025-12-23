@@ -30,10 +30,10 @@
         {
             this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(frmMain));
-            System.Windows.Forms.DataGridViewCellStyle dataGridViewCellStyle5 = new System.Windows.Forms.DataGridViewCellStyle();
-            System.Windows.Forms.DataVisualization.Charting.ChartArea chartArea5 = new System.Windows.Forms.DataVisualization.Charting.ChartArea();
-            System.Windows.Forms.DataVisualization.Charting.Legend legend5 = new System.Windows.Forms.DataVisualization.Charting.Legend();
-            System.Windows.Forms.DataVisualization.Charting.Series series5 = new System.Windows.Forms.DataVisualization.Charting.Series();
+            System.Windows.Forms.DataGridViewCellStyle dataGridViewCellStyle1 = new System.Windows.Forms.DataGridViewCellStyle();
+            System.Windows.Forms.DataVisualization.Charting.ChartArea chartArea1 = new System.Windows.Forms.DataVisualization.Charting.ChartArea();
+            System.Windows.Forms.DataVisualization.Charting.Legend legend1 = new System.Windows.Forms.DataVisualization.Charting.Legend();
+            System.Windows.Forms.DataVisualization.Charting.Series series1 = new System.Windows.Forms.DataVisualization.Charting.Series();
             this.panel1 = new System.Windows.Forms.Panel();
             this.txtCycleTimeRun = new System.Windows.Forms.TextBox();
             this.btnClearStations = new System.Windows.Forms.Button();
@@ -67,11 +67,14 @@
             this.btnRobotReset = new System.Windows.Forms.Button();
             this.tabControl2 = new System.Windows.Forms.TabControl();
             this.tabPage14 = new System.Windows.Forms.TabPage();
+            this.btnPutInspect = new System.Windows.Forms.Button();
             this.btnFooterWork1 = new System.Windows.Forms.Button();
             this.chkDebug = new System.Windows.Forms.CheckBox();
             this.btnFooterHome1 = new System.Windows.Forms.Button();
             this.tabControl1 = new System.Windows.Forms.TabControl();
             this.tabPage7 = new System.Windows.Forms.TabPage();
+            this.label112 = new System.Windows.Forms.Label();
+            this.txtFrontRotate = new System.Windows.Forms.TextBox();
             this.upDwnColor = new UserControl.UpDownControl.UpDownControl();
             this.txtDtolerance = new System.Windows.Forms.TextBox();
             this.txtPartLengthU = new System.Windows.Forms.TextBox();
@@ -520,9 +523,6 @@
             this.openFileDialog1 = new System.Windows.Forms.OpenFileDialog();
             this.bindingSource1 = new System.Windows.Forms.BindingSource(this.components);
             this.saveFileDialog1 = new System.Windows.Forms.SaveFileDialog();
-            this.txtFrontRotate = new System.Windows.Forms.TextBox();
-            this.label112 = new System.Windows.Forms.Label();
-            this.btnPutInspect = new System.Windows.Forms.Button();
             this.panel1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.trackSpeed)).BeginInit();
             this.groupBox1.SuspendLayout();
@@ -1103,6 +1103,20 @@
             this.tabPage14.TabIndex = 6;
             this.tabPage14.Text = "Inspection";
             // 
+            // btnPutInspect
+            // 
+            this.btnPutInspect.Image = ((System.Drawing.Image)(resources.GetObject("btnPutInspect.Image")));
+            this.btnPutInspect.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.btnPutInspect.Location = new System.Drawing.Point(521, 644);
+            this.btnPutInspect.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
+            this.btnPutInspect.Name = "btnPutInspect";
+            this.btnPutInspect.Size = new System.Drawing.Size(117, 50);
+            this.btnPutInspect.TabIndex = 457;
+            this.btnPutInspect.Text = "PUT INTO FOOTER";
+            this.btnPutInspect.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            this.btnPutInspect.UseVisualStyleBackColor = true;
+            this.btnPutInspect.Click += new System.EventHandler(this.btnPutInspect_Click);
+            // 
             // btnFooterWork1
             // 
             this.btnFooterWork1.Image = ((System.Drawing.Image)(resources.GetObject("btnFooterWork1.Image")));
@@ -1202,6 +1216,31 @@
             this.tabPage7.TabIndex = 0;
             this.tabPage7.Text = "Order";
             this.tabPage7.UseVisualStyleBackColor = true;
+            // 
+            // label112
+            // 
+            this.label112.AutoSize = true;
+            this.label112.Font = new System.Drawing.Font("Arial", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.label112.ForeColor = System.Drawing.Color.Blue;
+            this.label112.Location = new System.Drawing.Point(223, 494);
+            this.label112.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
+            this.label112.Name = "label112";
+            this.label112.Size = new System.Drawing.Size(31, 16);
+            this.label112.TabIndex = 458;
+            this.label112.Text = "deg";
+            // 
+            // txtFrontRotate
+            // 
+            this.txtFrontRotate.BackColor = System.Drawing.Color.White;
+            this.txtFrontRotate.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.txtFrontRotate.Font = new System.Drawing.Font("Arial", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.txtFrontRotate.Location = new System.Drawing.Point(141, 493);
+            this.txtFrontRotate.Margin = new System.Windows.Forms.Padding(2);
+            this.txtFrontRotate.Name = "txtFrontRotate";
+            this.txtFrontRotate.Size = new System.Drawing.Size(78, 22);
+            this.txtFrontRotate.TabIndex = 457;
+            this.txtFrontRotate.Text = "80.0";
+            this.txtFrontRotate.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
             // 
             // upDwnColor
             // 
@@ -3577,8 +3616,8 @@
             // 
             // dataGridViewReject
             // 
-            dataGridViewCellStyle5.Font = new System.Drawing.Font("Arial", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(177)));
-            this.dataGridViewReject.AlternatingRowsDefaultCellStyle = dataGridViewCellStyle5;
+            dataGridViewCellStyle1.Font = new System.Drawing.Font("Arial", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(177)));
+            this.dataGridViewReject.AlternatingRowsDefaultCellStyle = dataGridViewCellStyle1;
             this.dataGridViewReject.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.dataGridViewReject.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] {
             this.Column1,
@@ -4304,18 +4343,18 @@
             // CharWeldon
             // 
             this.CharWeldon.BackSecondaryColor = System.Drawing.Color.White;
-            chartArea5.Name = "ChartArea1";
-            this.CharWeldon.ChartAreas.Add(chartArea5);
-            legend5.Name = "Legend1";
-            this.CharWeldon.Legends.Add(legend5);
+            chartArea1.Name = "ChartArea1";
+            this.CharWeldon.ChartAreas.Add(chartArea1);
+            legend1.Name = "Legend1";
+            this.CharWeldon.Legends.Add(legend1);
             this.CharWeldon.Location = new System.Drawing.Point(19, 10);
             this.CharWeldon.Margin = new System.Windows.Forms.Padding(1);
             this.CharWeldon.Name = "CharWeldon";
-            series5.ChartArea = "ChartArea1";
-            series5.ChartType = System.Windows.Forms.DataVisualization.Charting.SeriesChartType.Line;
-            series5.Legend = "Legend1";
-            series5.Name = "Series1";
-            this.CharWeldon.Series.Add(series5);
+            series1.ChartArea = "ChartArea1";
+            series1.ChartType = System.Windows.Forms.DataVisualization.Charting.SeriesChartType.Line;
+            series1.Legend = "Legend1";
+            series1.Name = "Series1";
+            this.CharWeldon.Series.Add(series1);
             this.CharWeldon.Size = new System.Drawing.Size(689, 518);
             this.CharWeldon.TabIndex = 0;
             this.CharWeldon.Text = "chart1";
@@ -5040,7 +5079,7 @@
             this.trackBarSpeedSt.Location = new System.Drawing.Point(13, 225);
             this.trackBarSpeedSt.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
             this.trackBarSpeedSt.Maximum = 100;
-            this.trackBarSpeedSt.Minimum = 1;
+            this.trackBarSpeedSt.Minimum = 5;
             this.trackBarSpeedSt.Name = "trackBarSpeedSt";
             this.trackBarSpeedSt.Size = new System.Drawing.Size(194, 45);
             this.trackBarSpeedSt.TabIndex = 78;
@@ -7024,6 +7063,7 @@
             this.chkSuaNoReject.TabIndex = 451;
             this.chkSuaNoReject.Text = "Sua No Reject";
             this.chkSuaNoReject.UseVisualStyleBackColor = false;
+            this.chkSuaNoReject.Visible = false;
             // 
             // panel10
             // 
@@ -7154,6 +7194,7 @@
             this.chkSuaSim.TabIndex = 446;
             this.chkSuaSim.Text = "Sua Simulation";
             this.chkSuaSim.UseVisualStyleBackColor = false;
+            this.chkSuaSim.Visible = false;
             // 
             // chkVisionSim
             // 
@@ -7169,6 +7210,7 @@
             this.chkVisionSim.TabIndex = 445;
             this.chkVisionSim.Text = "Vision Simulation";
             this.chkVisionSim.UseVisualStyleBackColor = false;
+            this.chkVisionSim.Visible = false;
             // 
             // btnPortEnable
             // 
@@ -7252,45 +7294,6 @@
             // openFileDialog1
             // 
             this.openFileDialog1.FileName = "openFileDialog1";
-            // 
-            // txtFrontRotate
-            // 
-            this.txtFrontRotate.BackColor = System.Drawing.Color.White;
-            this.txtFrontRotate.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.txtFrontRotate.Font = new System.Drawing.Font("Arial", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.txtFrontRotate.Location = new System.Drawing.Point(141, 493);
-            this.txtFrontRotate.Margin = new System.Windows.Forms.Padding(2);
-            this.txtFrontRotate.Name = "txtFrontRotate";
-            this.txtFrontRotate.Size = new System.Drawing.Size(78, 22);
-            this.txtFrontRotate.TabIndex = 457;
-            this.txtFrontRotate.Text = "80.0";
-            this.txtFrontRotate.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
-            // 
-            // label112
-            // 
-            this.label112.AutoSize = true;
-            this.label112.Font = new System.Drawing.Font("Arial", 9.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label112.ForeColor = System.Drawing.Color.Blue;
-            this.label112.Location = new System.Drawing.Point(223, 494);
-            this.label112.Margin = new System.Windows.Forms.Padding(2, 0, 2, 0);
-            this.label112.Name = "label112";
-            this.label112.Size = new System.Drawing.Size(31, 16);
-            this.label112.TabIndex = 458;
-            this.label112.Text = "deg";
-            // 
-            // btnPutInspect
-            // 
-            this.btnPutInspect.Image = ((System.Drawing.Image)(resources.GetObject("btnPutInspect.Image")));
-            this.btnPutInspect.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            this.btnPutInspect.Location = new System.Drawing.Point(521, 644);
-            this.btnPutInspect.Margin = new System.Windows.Forms.Padding(5, 3, 5, 3);
-            this.btnPutInspect.Name = "btnPutInspect";
-            this.btnPutInspect.Size = new System.Drawing.Size(117, 50);
-            this.btnPutInspect.TabIndex = 457;
-            this.btnPutInspect.Text = "PUT INTO FOOTER";
-            this.btnPutInspect.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
-            this.btnPutInspect.UseVisualStyleBackColor = true;
-            this.btnPutInspect.Click += new System.EventHandler(this.btnPutInspect_Click);
             // 
             // frmMain
             // 
