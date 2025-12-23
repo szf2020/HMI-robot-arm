@@ -286,7 +286,7 @@ namespace EndmillHMI
                     //}
                     if (!reply.result) { return reply; }
                 string[] str = reply.comment.Split(',');
-                if (str.Length >= 3 && str[1] == "1") { } else reply.result = false;
+                if (str.Length >= 3 && str[1] == "1") { reply.result = true; } else reply.result = false;
                     return reply;
                 }
                 catch (Exception ex)
