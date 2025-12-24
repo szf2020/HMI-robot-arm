@@ -1182,6 +1182,14 @@ namespace EndmillHMI
                                 return reply;
                             }
                         }
+                        else if (timeout != null && timeout >= 0 && stopw.ElapsedMilliseconds > timeout)
+                        {
+                            reply.result = false;
+
+                            SetTextLst("-->" + "timeout error" +
+                                                   " // (" + DateTime.Now.ToString("HH:mm:ss.fff") + ")", lstSend, frm);
+                            return reply;
+                        }
                     }
                     catch (Exception ex)
                     {
