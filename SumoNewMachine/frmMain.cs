@@ -11410,10 +11410,10 @@ namespace EndmillHMI
 
                         if (!b)
                         {
-                            DialogResult res1 = MessageBox.Show("ERROR CONNECTION TO AS400! Continue ?", "Warning", MessageBoxButtons.OK,
+                            DialogResult res1 = MessageBox.Show("ERROR CONNECTION TO AS400! Use Local Copy ?", "Warning", MessageBoxButtons.OKCancel,
                            MessageBoxIcon.Warning);
 
-                            if (res1 == DialogResult.Yes) { }
+                            if (res1 == DialogResult.OK) { }
                             else return;
                         }
 
@@ -11686,7 +11686,7 @@ private bool LoadItemData(string file)
                     MessageBox.Show("ERROR ORDER NUMBER!");
                     return false;
                 }
-                RobotFunctions.CommReply reply = AS400.ReadHTTP(txtOrder.Text, 10000);
+                RobotFunctions.CommReply reply = AS400.ReadHTTP(txtOrder.Text, 2000);
 
                 //MessageBox.Show(reply.comment);
                 if (reply.comment == null)
