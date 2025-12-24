@@ -11386,6 +11386,7 @@ namespace EndmillHMI
                 if (txtOrder.Text.Length == 7)
                 {
                     OrderTest = txtOrder.Text;
+                    txtOrder_KeyPress(sender, new KeyPressEventArgs((char)Keys.Enter));
                 }
                 return;
 
